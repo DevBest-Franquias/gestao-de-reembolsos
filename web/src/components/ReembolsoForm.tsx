@@ -1,88 +1,86 @@
 import { useState, type FormEvent } from 'react';
-import { api, abrirAnexo, enviarAnexos, FORMAS, type Anexo, type Forma, type Fornecedor, type Reembolso, type Solicitante } from '../api';
-import { documentoValido, mascaraDocumento, soDigitos, tamanhoArquivo } from '../formato';
+import { api, abrirAnexo, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Fornecedor, type Reembolso, type Solicitante } from '../api';
+import { documentoValido, formatarData, mascaraDocumento, proximaTercaOuQuinta, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
-
-const PROPRIO = 'proprio';
-
-/** Dados bancários do solicitante, para conferência */
-function DadosBancarios({ s }: { s: Solicitante }) {
-  const conta = [s.banco, s.agencia && `Ag. ${s.agencia}`, s.conta && `Conta ${s.conta}`].filter(Boolean).join(' · ');
-  if (!conta && !s.chave_pix) {
-    return <p className="nota nota-alerta" style={{ margin: '10px 0 0' }}>Esse solicitante não tem dados bancários no cadastro. Complete em Solicitantes para receber o reembolso.</p>;
-  }
-  return (
-    <div className="dados-bancarios-form">
-      <span className="db-rotulo">Dados bancários para reembolso</span>
-      {conta && <span>{conta}</span>}
-      {s.chave_pix && <span><span className="rotulo-pix">Pix</span> {s.chave_pix}</span>}
-    </div>
-  );
-}
 
 const DICA_ANEXO = 'Nota fiscal / boleto / chave pix / outros (podem ser enviados vários arquivos separados)';
 
 type Props = {
   inicial: Reembolso | null;
   solicitantes: Solicitante[];
-  fornecedores: Fornecedor[];
+  fornecedores?: Fornecedor[];
   aoSalvar: () => void;
   aoCancelar: () => void;
 };
 
-export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoSalvar, aoCancelar }: Props) {
-  const [solicitanteId, setSolicitanteId] = useState<string>(
-    inicial ? (inicial.solicitante_id ? String(inicial.solicitante_id) : 'outro') : '',
-  );
-  const [solNome, setSolNome] = useState(inicial?.solicitante_nome ?? '');
-  const [solEmail, setSolEmail] = useState(inicial?.solicitante_email ?? '');
-  const [solCpf, setSolCpf] = useState(inicial?.solicitante_cpf ? mascaraDocumento(inicial.solicitante_cpf) : '');
-  const [salvarSolicitante, setSalvarSolicitante] = useState(true);
+/** O que falta no cadastro do solicitante para registrar um reembolso */
+function faltasCadastro(s: Solicitante) {
+  const faltas: string[] = [];
+  if (!s.cpf || !documentoValido(s.cpf)) faltas.push('CPF');
+  if (!s.chave_pix) faltas.push('chave Pix');
+  if (!s.banco) faltas.push('banco');
+  if (!s.agencia) faltas.push('agência');
+  if (!s.conta) faltas.push('conta');
+  return faltas;
+}
 
-  // Padrão: quem pagou foi o próprio solicitante, então o fornecedor não é novo e é ele mesmo
-  const [fornNovo, setFornNovo] = useState<'' | 'sim' | 'nao'>(inicial ? (inicial.fornecedor_novo ? 'sim' : 'nao') : 'nao');
-  const [fornecedorId, setFornecedorId] = useState(
-    !inicial ? PROPRIO : inicial.fornecedor_eh_solicitante ? PROPRIO : inicial.fornecedor_id ? String(inicial.fornecedor_id) : '',
+/** Campo travado: mostra o valor, mas não deixa alterar */
+function Fixo({ rotulo, valor, vazio = 'Não informado', classe }: { rotulo: string; valor: string; vazio?: string; classe?: string }) {
+  return (
+    <label className={`campo ${classe ?? ''}`}>
+      <span>{rotulo}</span>
+      <input value={valor} placeholder={vazio} readOnly tabIndex={-1} aria-readonly="true" />
+    </label>
   );
-  const [fornNome, setFornNome] = useState(inicial?.fornecedor_nome ?? '');
-  const [fornDoc, setFornDoc] = useState(inicial ? mascaraDocumento(inicial.fornecedor_documento) : '');
+}
 
-  const [numeroDoc, setNumeroDoc] = useState(inicial?.numero_documento ?? '');
-  const [dataPagamento, setDataPagamento] = useState(inicial?.data_pagamento ?? '');
+export default function ReembolsoForm({ inicial, solicitantes, aoSalvar, aoCancelar }: Props) {
+  const editando = !!inicial;
+  const [solicitanteId, setSolicitanteId] = useState(inicial?.solicitante_id ? String(inicial.solicitante_id) : '');
   const [valor, setValor] = useState(inicial?.valor_centavos ?? 0);
   const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
-  const [forma, setForma] = useState<Forma | ''>(inicial?.forma_pagamento ?? 'pix');
-
   const [anexos, setAnexos] = useState<Anexo[]>(inicial?.anexos ?? []);
   const [novosArquivos, setNovosArquivos] = useState<File[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  const escolherSolicitante = (id: string) => {
-    setSolicitanteId(id);
-    const s = solicitantes.find((x) => String(x.id) === id);
-    setSolNome(s?.nome ?? '');
-    setSolEmail(s?.email ?? '');
-    setSolCpf(s?.cpf ? mascaraDocumento(s.cpf) : '');
-  };
+  const s = solicitantes.find((x) => String(x.id) === solicitanteId);
 
-  const escolherFornecedor = (id: string) => {
-    setFornecedorId(id);
-    if (id === PROPRIO) { setFornNome(''); setFornDoc(''); return; }
-    const f = fornecedores.find((x) => String(x.id) === id);
-    setFornNome(f?.nome ?? '');
-    setFornDoc(f ? mascaraDocumento(f.documento) : '');
-  };
+  // Na edição, mostra o que foi registrado; numa nova solicitação, o que vem do cadastro
+  const dados = inicial
+    ? {
+        nome: inicial.solicitante_nome,
+        email: inicial.solicitante_email,
+        fornecedorNovo: inicial.fornecedor_novo ? 'Sim' : 'Não',
+        fornecedorNome: inicial.fornecedor_nome,
+        fornecedorDoc: inicial.fornecedor_documento,
+        numeroDoc: inicial.numero_documento,
+        vencimento: inicial.data_pagamento,
+        chavePix: inicial.chave_pix,
+        banco: inicial.banco,
+        agencia: inicial.agencia,
+        conta: inicial.conta,
+        empresa: inicial.empresa_pagadora,
+        multiplos: inicial.multiplos_centros_custo ? 'Sim' : 'Não',
+        centro: inicial.centro_custo,
+      }
+    : {
+        nome: s?.nome ?? '',
+        email: s?.email ?? '',
+        fornecedorNovo: 'Não',
+        fornecedorNome: s?.nome ?? '',
+        fornecedorDoc: s?.cpf ?? '',
+        numeroDoc: '0',
+        vencimento: proximaTercaOuQuinta(),
+        chavePix: s?.chave_pix ?? '',
+        banco: s?.banco ?? '',
+        agencia: s?.agencia ?? '',
+        conta: s?.conta ?? '',
+        empresa: EMPRESA_PAGADORA,
+        multiplos: 'Não',
+        centro: CENTRO_CUSTO_N5,
+      };
 
-  const mudarFornNovo = (v: '' | 'sim' | 'nao') => {
-    setFornNovo(v);
-    setFornecedorId(v === 'nao' ? PROPRIO : '');
-    setFornNome('');
-    setFornDoc('');
-  };
-
-  // Se digitar um CPF/CNPJ que já existe, avisa e oferece puxar do cadastro
-  const docDigitos = fornDoc.replace(/\D/g, '');
-  const jaCadastrado = fornNovo === 'sim' && docDigitos.length >= 11 ? fornecedores.find((f) => f.documento === docDigitos) : undefined;
+  const faltas = !editando && s ? faltasCadastro(s) : [];
 
   const removerAnexo = async (a: Anexo) => {
     if (!confirm(`Excluir o anexo ${a.nome_arquivo}?`)) return;
@@ -94,36 +92,15 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
 
   const salvar = async (e: FormEvent) => {
     e.preventDefault();
-    if (!solicitanteId) return avisar('Escolha o solicitante.', 'erro');
-    if (soDigitos(solCpf).length !== 11 || !documentoValido(solCpf)) return avisar('CPF do solicitante inválido.', 'erro');
-    if (!fornNovo) return avisar('Informe se o fornecedor é novo.', 'erro');
-    if (fornNovo === 'nao' && !fornecedorId) return avisar('Escolha o fornecedor.', 'erro');
-    if (fornNovo === 'sim' && !documentoValido(fornDoc)) return avisar('CPF ou CNPJ do fornecedor inválido.', 'erro');
+    if (!inicial && !s) return avisar('Escolha o solicitante.', 'erro');
+    if (faltas.length) return avisar('Complete o cadastro do solicitante antes de registrar.', 'erro');
     if (!valor) return avisar('Informe o valor do pagamento.', 'erro');
-    if (!forma) return avisar('Escolha a forma de pagamento.', 'erro');
 
     setSalvando(true);
     try {
-      const dados = {
-        solicitante_id: solicitanteId !== 'outro' ? Number(solicitanteId) : null,
-        solicitante_nome: solNome,
-        solicitante_email: solEmail,
-        solicitante_cpf: solCpf,
-        salvar_solicitante: solicitanteId === 'outro' && salvarSolicitante,
-        fornecedor_novo: fornNovo === 'sim',
-        fornecedor_proprio: fornecedorProprio,
-        fornecedor_id: fornNovo === 'nao' && !fornecedorProprio ? Number(fornecedorId) : null,
-        fornecedor_nome: fornNome,
-        fornecedor_documento: fornDoc,
-        numero_documento: numeroDoc,
-        data_pagamento: dataPagamento || null,
-        valor_centavos: valor,
-        descricao,
-        forma_pagamento: forma,
-      };
       const r = await api<Reembolso>(inicial ? `/reembolsos/${inicial.id}` : '/reembolsos', {
         method: inicial ? 'PUT' : 'POST',
-        json: dados,
+        json: inicial ? { valor_centavos: valor, descricao } : { solicitante_id: Number(solicitanteId), valor_centavos: valor, descricao },
       });
       if (novosArquivos.length) await enviarAnexos(r.id, novosArquivos);
       avisar(inicial ? 'Solicitação atualizada.' : 'Solicitação registrada.');
@@ -135,140 +112,63 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
     }
   };
 
-  const solicitanteDoCadastro = solicitanteId !== '' && solicitanteId !== 'outro';
-  const solicitanteSel = solicitantes.find((x) => String(x.id) === solicitanteId);
-  const fornecedorProprio = fornNovo === 'nao' && fornecedorId === PROPRIO;
-  const cadastroSemCpf = solicitanteDoCadastro && !solicitantes.find((x) => String(x.id) === solicitanteId)?.cpf;
-
   return (
     <form className="form" onSubmit={salvar}>
       <fieldset className="grupo">
         <legend>Solicitante</legend>
-        <div className="grade grade-3">
-          <label className="campo">
-            <span>Nome do solicitante</span>
-            <select value={solicitanteId} onChange={(e) => escolherSolicitante(e.target.value)} required>
-              <option value="">Selecione</option>
-              {solicitantes.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-              <option value="outro">Outro (digitar)</option>
-            </select>
-          </label>
-          {solicitanteId === 'outro' && (
+        <div className="grade grade-2">
+          {inicial ? (
+            <Fixo rotulo="Nome do solicitante" valor={dados.nome} />
+          ) : (
             <label className="campo">
-              <span>Nome completo</span>
-              <input value={solNome} onChange={(e) => setSolNome(e.target.value)} required />
+              <span>Nome do solicitante</span>
+              <select value={solicitanteId} onChange={(e) => setSolicitanteId(e.target.value)} required autoFocus>
+                <option value="">Selecione</option>
+                {solicitantes.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+              </select>
             </label>
           )}
-          <label className="campo">
-            <span>CPF do solicitante</span>
-            <input
-              inputMode="numeric"
-              value={solCpf}
-              placeholder={solicitanteDoCadastro && !cadastroSemCpf ? '' : '000.000.000-00'}
-              onChange={(e) => setSolCpf(mascaraDocumento(soDigitos(e.target.value).slice(0, 11)))}
-              readOnly={solicitanteDoCadastro && !cadastroSemCpf}
-              required
-            />
-            {soDigitos(solCpf).length === 11 && !documentoValido(solCpf) && <span className="erro">CPF inválido.</span>}
-            {cadastroSemCpf && <span className="mudo pequeno">Esse solicitante ainda não tem CPF no cadastro. O CPF informado aqui será salvo nele.</span>}
-          </label>
-          <label className="campo">
-            <span>E-mail do solicitante</span>
-            <input type="email" value={solEmail} onChange={(e) => setSolEmail(e.target.value)} readOnly={solicitanteDoCadastro} required />
-          </label>
+          <Fixo rotulo="E-mail do solicitante" valor={dados.email} vazio="Preenchido ao escolher" />
         </div>
-        {solicitanteSel && <DadosBancarios s={solicitanteSel} />}
-        {solicitanteId === 'outro' && (
-          <label className="marcar">
-            <input type="checkbox" checked={salvarSolicitante} onChange={(e) => setSalvarSolicitante(e.target.checked)} />
-            Salvar no cadastro de solicitantes
-          </label>
+        {faltas.length > 0 && (
+          <p className="nota nota-alerta" style={{ margin: '12px 0 0' }}>
+            O cadastro de <strong>{s!.nome}</strong> está incompleto. Falta: {faltas.join(', ')}. Complete em <a href="#solicitantes">Solicitantes</a> para registrar o reembolso.
+          </p>
         )}
       </fieldset>
 
       <fieldset className="grupo">
         <legend>Fornecedor</legend>
         <div className="grade grade-3">
-          <label className="campo">
-            <span>Fornecedor novo</span>
-            <select value={fornNovo} onChange={(e) => mudarFornNovo(e.target.value as '' | 'sim' | 'nao')} required>
-              <option value="">Selecione</option>
-              <option value="sim">Sim</option>
-              <option value="nao">Não</option>
-            </select>
-          </label>
-          {fornNovo === 'nao' && (
-            <>
-              <label className="campo">
-                <span>Nome / Razão social</span>
-                <select value={fornecedorId} onChange={(e) => escolherFornecedor(e.target.value)} required>
-                  <option value={PROPRIO}>O próprio solicitante</option>
-                  {fornecedores.length > 0 && (
-                    <optgroup label="Fornecedores cadastrados">
-                      {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                    </optgroup>
-                  )}
-                </select>
-              </label>
-              <label className="campo">
-                <span>CNPJ / CPF</span>
-                <input value={fornecedorProprio ? solCpf : fornDoc} readOnly placeholder={fornecedorProprio ? 'CPF do solicitante' : 'Preenchido ao escolher'} />
-              </label>
-            </>
-          )}
-          {fornNovo === 'sim' && (
-            <>
-              <label className="campo">
-                <span>Nome / Razão social</span>
-                <input value={fornNome} onChange={(e) => setFornNome(e.target.value)} required />
-              </label>
-              <label className="campo">
-                <span>CNPJ / CPF</span>
-                <input inputMode="numeric" value={fornDoc} onChange={(e) => setFornDoc(mascaraDocumento(e.target.value))} required />
-              </label>
-            </>
-          )}
+          <Fixo rotulo="Fornecedor novo" valor={dados.fornecedorNovo} />
+          <Fixo rotulo="Nome / Razão social" valor={dados.fornecedorNome} vazio="Nome do solicitante" />
+          <Fixo rotulo="CNPJ / CPF" valor={dados.fornecedorDoc ? mascaraDocumento(dados.fornecedorDoc) : ''} vazio="CPF do solicitante" />
         </div>
-        {fornNovo === 'sim' && docDigitos.length >= 11 && !documentoValido(fornDoc) && <p className="erro">CPF ou CNPJ inválido.</p>}
-        {jaCadastrado && (
-          <p className="nota">
-            Esse CPF/CNPJ já está cadastrado como <strong>{jaCadastrado.nome}</strong>.{' '}
-            <button type="button" className="link" onClick={() => { setFornNovo('nao'); escolherFornecedor(String(jaCadastrado.id)); }}>
-              Usar o cadastro
-            </button>
-          </p>
-        )}
-        {fornNovo === 'sim' && !jaCadastrado && <p className="mudo pequeno">O fornecedor será adicionado ao cadastro ao salvar.</p>}
-        {fornecedorProprio && <p className="mudo pequeno">Use quando você mesmo pagou pela empresa. O reembolso vai para os dados bancários do solicitante.</p>}
       </fieldset>
 
       <fieldset className="grupo">
         <legend>Pagamento</legend>
         <div className="grade grade-3">
-          <label className="campo">
-            <span>Número do documento</span>
-            <input value={numeroDoc} onChange={(e) => setNumeroDoc(e.target.value)} />
-          </label>
-          <label className="campo">
-            <span>Data do pagamento</span>
-            <input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
-          </label>
+          <Fixo rotulo="Número do documento" valor={dados.numeroDoc} />
+          <Fixo rotulo="Data de vencimento" valor={formatarData(dados.vencimento)} />
           <label className="campo">
             <span>Valor do pagamento</span>
             <CampoMoeda centavos={valor} aoMudar={setValor} />
           </label>
-          <label className="campo">
-            <span>Forma de pagamento</span>
-            <select value={forma} onChange={(e) => setForma(e.target.value as Forma)} required>
-              <option value="">Selecione</option>
-              {Object.entries(FORMAS).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
-            </select>
-          </label>
-          <label className="campo coluna-2">
+          <label className="campo coluna-3">
             <span>Descrição do pagamento</span>
-            <input value={descricao} onChange={(e) => setDescricao(e.target.value)} />
+            <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} />
           </label>
+          <Fixo rotulo="Forma de pagamento" valor="Pix" />
+          <Fixo rotulo="Chave PIX" valor={dados.chavePix} vazio="Do cadastro do solicitante" classe="coluna-2" />
+          <Fixo rotulo="Banco" valor={dados.banco} vazio="Do cadastro do solicitante" />
+          <Fixo rotulo="Agência" valor={dados.agencia} vazio="Do cadastro do solicitante" />
+          <Fixo rotulo="Conta" valor={dados.conta} vazio="Do cadastro do solicitante" />
+          <Fixo rotulo="Empresa pagadora" valor={dados.empresa} classe="coluna-3" />
+          <Fixo rotulo="O custo deverá ser atrelado a mais de um centro de custo?" valor={dados.multiplos} classe="coluna-2" />
+          <Fixo rotulo="Centro de custo - N5" valor={dados.centro} />
         </div>
+        {!inicial && <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>A data de vencimento é sempre a próxima terça ou quinta-feira a partir de hoje.</p>}
       </fieldset>
 
       <fieldset className="grupo">
@@ -313,7 +213,9 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
 
       <div className="form-rodape">
         <button type="button" className="btn btn-fantasma" onClick={aoCancelar}>Cancelar</button>
-        <button className="btn btn-primario" disabled={salvando}>{salvando ? 'Salvando…' : inicial ? 'Salvar alterações' : 'Registrar solicitação'}</button>
+        <button className="btn btn-primario" disabled={salvando || faltas.length > 0}>
+          {salvando ? 'Salvando…' : inicial ? 'Salvar alterações' : 'Registrar solicitação'}
+        </button>
       </div>
     </form>
   );

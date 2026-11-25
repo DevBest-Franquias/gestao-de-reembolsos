@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, abrirAnexo, FORMAS, STATUS, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
 import ReembolsoForm from '../components/ReembolsoForm';
-import PainelJanela from '../components/PainelJanela';
 import { Modal, avisar, msgErro } from '../components/ui';
 import { formatarData, formatarMoeda, mascaraDocumento } from '../formato';
-import { carregarJanelas } from '../api';
-import { descreverDistancia, formatarDia, proximasJanelas } from '../janelas';
 
 type Filtro = Status | 'todos';
 
@@ -17,7 +14,6 @@ export default function Reembolsos() {
   const [form, setForm] = useState<{ item: Reembolso | null } | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [busca, setBusca] = useState('');
-  const [proxima, setProxima] = useState<Date | null>(null);
 
   const carregar = async () => {
     try {
@@ -30,10 +26,7 @@ export default function Reembolsos() {
     } catch (e) { avisar(msgErro(e), 'erro'); }
     finally { setCarregando(false); }
   };
-  useEffect(() => {
-    carregar();
-    carregarJanelas().then((r) => setProxima(proximasJanelas(r.janelas, 1)[0] ?? null));
-  }, []);
+  useEffect(() => { carregar(); }, []);
 
   const atualizar = async (id: number, mudanca: Partial<Pick<Reembolso, 'status' | 'data_reembolso'>>) => {
     try {
@@ -63,7 +56,7 @@ export default function Reembolsos() {
     return lista.filter((r) => {
       if (filtro !== 'todos' && r.status !== filtro) return false;
       if (!t) return true;
-      const alvo = `${r.solicitante_nome} ${r.solicitante_email} ${r.solicitante_cpf} ${mascaraDocumento(r.solicitante_cpf || '')} ${r.fornecedor_nome} ${r.numero_documento} ${r.descricao}`.toLowerCase();
+      const alvo = `${r.chave_pix ?? ''} ${r.solicitante_nome} ${r.solicitante_email} ${r.solicitante_cpf} ${mascaraDocumento(r.solicitante_cpf || '')} ${r.fornecedor_nome} ${r.numero_documento} ${r.descricao}`.toLowerCase();
       return alvo.includes(t) || (tDig.length >= 3 && r.fornecedor_documento.includes(tDig));
     });
   }, [lista, filtro, busca]);
@@ -79,15 +72,6 @@ export default function Reembolsos() {
         </div>
         <button className="btn btn-primario" onClick={() => setForm({ item: null })}>Nova solicitação</button>
       </div>
-
-      {proxima && (
-        <a href="#janelas" className="faixa-janela">
-          <span className="faixa-rotulo">Próxima janela de pagamento</span>
-          <strong>{formatarDia(proxima)}</strong>
-          <span className="faixa-distancia">{descreverDistancia(proxima)}</span>
-          <span className="faixa-link">Ver calendário ›</span>
-        </a>
-      )}
 
       <div className="filtros">
         <div className="pilulas" role="tablist">
@@ -115,10 +99,17 @@ export default function Reembolsos() {
               <th>Nome / Razão social</th>
               <th>CNPJ / CPF</th>
               <th>Nº documento</th>
-              <th>Data do pagamento</th>
+              <th>Data de vencimento</th>
               <th className="num">Valor</th>
               <th>Descrição</th>
               <th>Forma de pagamento</th>
+              <th>Chave PIX</th>
+              <th>Banco</th>
+              <th>Agência</th>
+              <th>Conta</th>
+              <th>Empresa pagadora</th>
+              <th>Mais de um centro de custo?</th>
+              <th>Centro de custo - N5</th>
               <th>Anexos</th>
               <th className="col-acomp col-status">Status</th>
               <th className="col-acomp col-data">Data do reembolso</th>
@@ -139,6 +130,13 @@ export default function Reembolsos() {
                 <td className="num forte">{formatarMoeda(r.valor_centavos)}</td>
                 <td className="descricao" title={r.descricao}>{r.descricao}</td>
                 <td>{FORMAS[r.forma_pagamento]}</td>
+                <td>{r.chave_pix || <span className="mudo">-</span>}</td>
+                <td>{r.banco || <span className="mudo">-</span>}</td>
+                <td>{r.agencia || <span className="mudo">-</span>}</td>
+                <td>{r.conta || <span className="mudo">-</span>}</td>
+                <td>{r.empresa_pagadora || <span className="mudo">-</span>}</td>
+                <td>{r.empresa_pagadora ? (r.multiplos_centros_custo ? 'Sim' : 'Não') : <span className="mudo">-</span>}</td>
+                <td>{r.centro_custo || <span className="mudo">-</span>}</td>
                 <td>
                   {r.anexos.length === 0 ? <span className="mudo">Nenhum</span> : (
                     <div className="anexos-celula">
@@ -165,16 +163,15 @@ export default function Reembolsos() {
               </tr>
             ))}
             {!carregando && !filtrados.length && (
-              <tr><td colSpan={15} className="vazio">{lista.length ? 'Nenhuma solicitação com esses filtros.' : 'Nenhuma solicitação registrada ainda.'}</td></tr>
+              <tr><td colSpan={22} className="vazio">{lista.length ? 'Nenhuma solicitação com esses filtros.' : 'Nenhuma solicitação registrada ainda.'}</td></tr>
             )}
-            {carregando && <tr><td colSpan={15} className="vazio">Carregando…</td></tr>}
+            {carregando && <tr><td colSpan={22} className="vazio">Carregando…</td></tr>}
           </tbody>
         </table>
       </div>
 
-      <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo extraLargo={!!form && !form.item}>
+      <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo>
         {form && (
-          <div className={form.item ? '' : 'form-com-janela'}>
             <ReembolsoForm
               inicial={form.item}
               solicitantes={solicitantes}
@@ -182,8 +179,6 @@ export default function Reembolsos() {
               aoCancelar={() => setForm(null)}
               aoSalvar={() => { setForm(null); carregar(); }}
             />
-            {!form.item && <PainelJanela />}
-          </div>
         )}
       </Modal>
     </section>

@@ -462,134 +462,96 @@ app.get('/api/reembolsos', async (c) => {
   return c.json(results.map((r) => ({ ...r, anexos: porReembolso.get(r.id as number) ?? [] })));
 });
 
-async function lerReembolso(c: Ctx) {
-  const b = await c.req.json().catch(() => ({}));
-  const db = c.env.DB;
+/* Valores fixos da solicitação de reembolso */
+const EMPRESA_PAGADORA = '[1026] BEST INVESTIDAS LTDA';
+const CENTRO_CUSTO_N5 = '[5766] FRANQUIAS';
 
-  // Solicitante: vem do cadastro ou é digitado
-  let solicitante_id: number | null = b.solicitante_id ? Number(b.solicitante_id) : null;
-  let solicitante_nome = texto(b.solicitante_nome);
-  let solicitante_email = texto(b.solicitante_email).toLowerCase();
-  let solicitante_cpf = soDigitos(b.solicitante_cpf);
-  let completarCpfCadastro = false;
-  if (solicitante_id) {
-    const s = await db.prepare('SELECT * FROM solicitantes WHERE id = ?').bind(solicitante_id).first<{ nome: string; email: string; cpf: string }>();
-    if (!s) return { falha: 'Solicitante não encontrado.' };
-    solicitante_nome = s.nome;
-    solicitante_email = s.email;
-    // Usa o CPF do cadastro; se o cadastro ainda não tiver, aceita o informado e completa o cadastro
-    if (s.cpf) solicitante_cpf = s.cpf;
-    else completarCpfCadastro = true;
-  }
-  if (!solicitante_nome) return { falha: 'Informe o solicitante.' };
-  if (!cpfValido(solicitante_cpf)) return { falha: 'CPF do solicitante inválido.' };
-  if (!emailValido(solicitante_email)) return { falha: 'Informe um e-mail válido para o solicitante.' };
-  if (completarCpfCadastro || (!solicitante_id && b.salvar_solicitante)) {
-    const outro = await cpfEmUso(db, solicitante_cpf, solicitante_id ?? 0);
-    if (outro) return { falha: `Esse CPF já está cadastrado para ${outro.nome}.` };
-  }
-  if (completarCpfCadastro) {
-    await db.prepare('UPDATE solicitantes SET cpf = ? WHERE id = ?').bind(solicitante_cpf, solicitante_id).run();
-  }
-  if (!solicitante_id && b.salvar_solicitante) {
-    const novo = await db
-      .prepare('INSERT INTO solicitantes (nome, email, cpf) VALUES (?, ?, ?) RETURNING id')
-      .bind(solicitante_nome, solicitante_email, solicitante_cpf)
-      .first<{ id: number }>();
-    solicitante_id = novo!.id;
-  }
-
-  // Fornecedor: existente no cadastro ou novo
-  // Fornecedor pode ser o próprio solicitante (pagou algo pela empresa)
-  const fornecedor_eh_solicitante = !b.fornecedor_novo && b.fornecedor_proprio ? 1 : 0;
-  const fornecedor_novo = b.fornecedor_novo ? 1 : 0;
-  let fornecedor_id: number | null = b.fornecedor_id ? Number(b.fornecedor_id) : null;
-  let fornecedor_nome = texto(b.fornecedor_nome);
-  let fornecedor_documento = soDigitos(b.fornecedor_documento);
-  if (fornecedor_eh_solicitante) {
-    fornecedor_id = null;
-    fornecedor_nome = solicitante_nome;
-    fornecedor_documento = solicitante_cpf;
-  } else if (!fornecedor_novo && fornecedor_id) {
-    const f = await db.prepare('SELECT * FROM fornecedores WHERE id = ?').bind(fornecedor_id).first<{ nome: string; documento: string }>();
-    if (!f) return { falha: 'Fornecedor não encontrado.' };
-    fornecedor_nome = f.nome;
-    fornecedor_documento = f.documento;
-  } else {
-    if (!fornecedor_nome) return { falha: 'Informe o nome ou razão social do fornecedor.' };
-    if (!documentoValido(fornecedor_documento)) return { falha: 'CPF ou CNPJ do fornecedor inválido.' };
-    // Fornecedor novo entra no cadastro automaticamente (ou reaproveita se o documento já existir)
-    const existente = await db.prepare('SELECT id FROM fornecedores WHERE documento = ?').bind(fornecedor_documento).first<{ id: number }>();
-    if (existente) fornecedor_id = existente.id;
-    else {
-      const novo = await db
-        .prepare('INSERT INTO fornecedores (nome, documento) VALUES (?, ?) RETURNING id')
-        .bind(fornecedor_nome, fornecedor_documento)
-        .first<{ id: number }>();
-      fornecedor_id = novo!.id;
-    }
-  }
-
-  const forma_pagamento = String(b.forma_pagamento ?? '');
-  if (!FORMAS.includes(forma_pagamento as (typeof FORMAS)[number])) return { falha: 'Escolha a forma de pagamento.' };
-  const valor_centavos = Math.round(Number(b.valor_centavos));
-  if (!Number.isFinite(valor_centavos) || valor_centavos <= 0) return { falha: 'Informe o valor do pagamento.' };
-  const data_pagamento = b.data_pagamento ? String(b.data_pagamento) : null;
-  if (data_pagamento && !dataValida(data_pagamento)) return { falha: 'Data do pagamento inválida.' };
-
-  return {
-    solicitante_id,
-    solicitante_nome,
-    solicitante_email,
-    solicitante_cpf,
-    fornecedor_novo,
-    fornecedor_eh_solicitante,
-    fornecedor_id,
-    fornecedor_nome,
-    fornecedor_documento,
-    numero_documento: texto(b.numero_documento),
-    data_pagamento,
-    valor_centavos,
-    descricao: texto(b.descricao),
-    forma_pagamento,
-  };
+/** Próxima terça ou quinta-feira depois de hoje, no horário de Brasília (AAAA-MM-DD) */
+function proximaTercaOuQuinta(agora = new Date()) {
+  const d = new Date(agora.getTime() - 3 * 3600e3);
+  d.setUTCHours(12, 0, 0, 0);
+  do d.setUTCDate(d.getUTCDate() + 1);
+  while (d.getUTCDay() !== 2 && d.getUTCDay() !== 4);
+  return d.toISOString().slice(0, 10);
 }
 
-const CAMPOS = [
-  'solicitante_id',
-  'solicitante_nome',
-  'solicitante_email',
-  'solicitante_cpf',
-  'fornecedor_novo',
-  'fornecedor_eh_solicitante',
-  'fornecedor_id',
-  'fornecedor_nome',
-  'fornecedor_documento',
-  'numero_documento',
-  'data_pagamento',
-  'valor_centavos',
-  'descricao',
-  'forma_pagamento',
-] as const;
+type SolicitanteCompleto = {
+  id: number; nome: string; email: string; cpf: string;
+  banco: string; agencia: string; conta: string; chave_pix: string;
+};
 
+/** O que falta no cadastro do solicitante para registrar um reembolso */
+function faltasCadastro(s: SolicitanteCompleto) {
+  const faltas: string[] = [];
+  if (!cpfValido(s.cpf)) faltas.push('CPF');
+  if (!s.chave_pix) faltas.push('chave Pix');
+  if (!s.banco) faltas.push('banco');
+  if (!s.agencia) faltas.push('agência');
+  if (!s.conta) faltas.push('conta');
+  return faltas;
+}
+
+const listaHumana = (l: string[]) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} e ${l[l.length - 1]}` : l[0]);
+
+function lerValorDescricao(b: Record<string, unknown>) {
+  const valor_centavos = Math.round(Number(b.valor_centavos));
+  if (!Number.isFinite(valor_centavos) || valor_centavos <= 0) return { falha: 'Informe o valor do pagamento.' };
+  return { valor_centavos, descricao: texto(b.descricao).slice(0, 500) };
+}
+
+// Registro: só solicitante, valor e descrição vêm do formulário. O resto é fixo ou vem do cadastro.
 app.post('/api/reembolsos', async (c) => {
-  const d = await lerReembolso(c);
-  if ('falha' in d) return erro(c, d.falha as string);
+  const b = await c.req.json().catch(() => ({}));
+  const sid = Number(b.solicitante_id);
+  const s = sid ? await c.env.DB.prepare('SELECT * FROM solicitantes WHERE id = ?').bind(sid).first<SolicitanteCompleto>() : null;
+  if (!s) return erro(c, 'Escolha o solicitante.');
+  const faltas = faltasCadastro(s);
+  if (faltas.length) return erro(c, `Complete o cadastro de ${s.nome} em Solicitantes. Falta: ${listaHumana(faltas)}.`);
+  const v = lerValorDescricao(b);
+  if ('falha' in v) return erro(c, v.falha!);
+
+  const dados: Record<string, string | number | null> = {
+    solicitante_id: s.id,
+    solicitante_nome: s.nome,
+    solicitante_email: s.email,
+    solicitante_cpf: s.cpf,
+    fornecedor_novo: 0,
+    fornecedor_eh_solicitante: 1,
+    fornecedor_id: null,
+    fornecedor_nome: s.nome,
+    fornecedor_documento: s.cpf,
+    numero_documento: '0',
+    data_pagamento: proximaTercaOuQuinta(),
+    valor_centavos: v.valor_centavos,
+    descricao: v.descricao,
+    forma_pagamento: 'pix',
+    chave_pix: s.chave_pix,
+    banco: s.banco,
+    agencia: s.agencia,
+    conta: s.conta,
+    empresa_pagadora: EMPRESA_PAGADORA,
+    multiplos_centros_custo: 0,
+    centro_custo: CENTRO_CUSTO_N5,
+    criado_por: c.get('usuario').id,
+  };
+  const campos = Object.keys(dados);
   const r = await c.env.DB.prepare(
-    `INSERT INTO reembolsos (${CAMPOS.join(', ')}, criado_por) VALUES (${CAMPOS.map(() => '?').join(', ')}, ?) RETURNING *`,
+    `INSERT INTO reembolsos (${campos.join(', ')}) VALUES (${campos.map(() => '?').join(', ')}) RETURNING *`,
   )
-    .bind(...CAMPOS.map((k) => d[k]), c.get('usuario').id)
+    .bind(...campos.map((k) => dados[k]))
     .first();
   return c.json({ ...r, anexos: [] }, 201);
 });
 
+// Edição: só valor e descrição podem mudar
 app.put('/api/reembolsos/:id', async (c) => {
-  const d = await lerReembolso(c);
-  if ('falha' in d) return erro(c, d.falha as string);
+  const b = await c.req.json().catch(() => ({}));
+  const v = lerValorDescricao(b);
+  if ('falha' in v) return erro(c, v.falha!);
   const r = await c.env.DB.prepare(
-    `UPDATE reembolsos SET ${CAMPOS.map((k) => `${k} = ?`).join(', ')}, atualizado_em = datetime('now') WHERE id = ? RETURNING *`,
+    "UPDATE reembolsos SET valor_centavos = ?, descricao = ?, atualizado_em = datetime('now') WHERE id = ? RETURNING *",
   )
-    .bind(...CAMPOS.map((k) => d[k]), Number(c.req.param('id')))
+    .bind(v.valor_centavos, v.descricao, Number(c.req.param('id')))
     .first();
   if (!r) return erro(c, 'Solicitação não encontrada.', 404);
   return c.json(r);
@@ -673,44 +635,6 @@ app.delete('/api/anexos/:id', async (c) => {
   await c.env.ANEXOS.delete(a.chave_r2);
   await c.env.DB.prepare('DELETE FROM anexos WHERE id = ?').bind(Number(c.req.param('id'))).run();
   return c.json({ ok: true });
-});
-
-/* ---------- Janelas de pagamento ---------- */
-type LinhaJanela = { mes: string; dias: string; observacao: string; atualizado_em: string };
-const mesValido = (m: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m);
-const diasNoMes = (mes: string) => {
-  const [a, m] = mes.split('-').map(Number);
-  return new Date(Date.UTC(a, m, 0)).getUTCDate();
-};
-const janelaPublica = (j: LinhaJanela) => ({
-  mes: j.mes,
-  dias: j.dias ? j.dias.split(',').map(Number).filter(Boolean) : [],
-  observacao: j.observacao,
-  atualizado_em: j.atualizado_em,
-});
-
-app.get('/api/janelas', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM janelas_pagamento ORDER BY mes').all<LinhaJanela>();
-  return c.json(results.map(janelaPublica));
-});
-
-app.put('/api/janelas/:mes', somenteAdmin, async (c) => {
-  const mes = c.req.param('mes') ?? '';
-  if (!mesValido(mes)) return erro(c, 'Mês inválido.');
-  const b = await c.req.json().catch(() => ({}));
-  const max = diasNoMes(mes);
-  const dias = [...new Set<number>((Array.isArray(b.dias) ? b.dias : []).map(Number))]
-    .filter((d) => Number.isInteger(d) && d >= 1 && d <= max)
-    .sort((x, y) => x - y);
-  const observacao = texto(b.observacao).slice(0, 1000);
-  const r = await c.env.DB.prepare(
-    `INSERT INTO janelas_pagamento (mes, dias, observacao, atualizado_em) VALUES (?, ?, ?, datetime('now'))
-     ON CONFLICT(mes) DO UPDATE SET dias = excluded.dias, observacao = excluded.observacao, atualizado_em = excluded.atualizado_em
-     RETURNING *`,
-  )
-    .bind(mes, dias.join(','), observacao)
-    .first<LinhaJanela>();
-  return c.json(janelaPublica(r!));
 });
 
 /* ---------- Links úteis ---------- */

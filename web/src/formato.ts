@@ -52,3 +52,11 @@ export const hojeISO = () => {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 10);
 };
+
+/** Próxima terça ou quinta-feira depois de hoje (AAAA-MM-DD). A API calcula a mesma data ao registrar. */
+export function proximaTercaOuQuinta(base = new Date()) {
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  do d.setDate(d.getDate() + 1);
+  while (d.getDay() !== 2 && d.getDay() !== 4);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

@@ -6,13 +6,12 @@ import Reembolsos from './pages/Reembolsos';
 import Solicitantes from './pages/Solicitantes';
 import Fornecedores from './pages/Fornecedores';
 import Usuarios from './pages/Usuarios';
-import Janelas from './pages/Janelas';
 
-type Aba = 'reembolsos' | 'janelas' | 'solicitantes' | 'fornecedores' | 'usuarios';
+type Aba = 'reembolsos' | 'solicitantes' | 'fornecedores' | 'usuarios';
 
 const lerAba = (): Aba => {
   const h = window.location.hash.replace('#', '');
-  return (['reembolsos', 'janelas', 'solicitantes', 'fornecedores', 'usuarios'] as Aba[]).includes(h as Aba) ? (h as Aba) : 'reembolsos';
+  return (['reembolsos', 'solicitantes', 'fornecedores', 'usuarios'] as Aba[]).includes(h as Aba) ? (h as Aba) : 'reembolsos';
 };
 
 export default function App() {
@@ -43,7 +42,6 @@ export default function App() {
 
   const abas: [Aba, string][] = [
     ['reembolsos', 'Reembolsos'],
-    ['janelas', 'Janelas de pagamento'],
     ['solicitantes', 'Solicitantes'],
     ['fornecedores', 'Fornecedores'],
     ...(usuario.papel === 'admin' ? [['usuarios', 'Usuários'] as [Aba, string]] : []),
@@ -65,7 +63,6 @@ export default function App() {
       </header>
       <main className="conteudo">
         {aba === 'reembolsos' && <Reembolsos />}
-        {aba === 'janelas' && <Janelas eu={usuario} />}
         {aba === 'solicitantes' && <Solicitantes />}
         {aba === 'fornecedores' && <Fornecedores />}
         {aba === 'usuarios' && usuario.papel === 'admin' && <Usuarios eu={usuario} />}

@@ -81,6 +81,13 @@ export type Reembolso = {
   solicitante_cpf: string;
   fornecedor_novo: number;
   fornecedor_eh_solicitante: number;
+  chave_pix: string;
+  banco: string;
+  agencia: string;
+  conta: string;
+  empresa_pagadora: string;
+  multiplos_centros_custo: number;
+  centro_custo: string;
   fornecedor_id: number | null;
   fornecedor_nome: string;
   fornecedor_documento: string;
@@ -107,8 +114,7 @@ export const STATUS: Record<Status, string> = {
   pago: 'Pago',
 };
 
-/* ---------- Janelas de pagamento e links úteis ---------- */
-export type Janela = { mes: string; dias: number[]; observacao: string; atualizado_em?: string };
+/* ---------- Links úteis ---------- */
 export type LinkUtil = { id?: number; titulo: string; url: string };
 
 /** Links usados quando a API está fora do ar e ainda não há nada guardado no navegador */
@@ -137,14 +143,6 @@ export async function carregarLinks(): Promise<{ links: LinkUtil[]; offline: boo
 export const linksEmCache = () => lerCache<LinkUtil[]>('reembolsos_links') ?? LINKS_PADRAO;
 export const guardarLinks = (links: LinkUtil[]) => gravarCache('reembolsos_links', links);
 
-/** Mesma ideia para as janelas: a última cópia fica no navegador */
-export async function carregarJanelas(): Promise<{ janelas: Janela[]; offline: boolean }> {
-  try {
-    const janelas = await api<Janela[]>('/janelas');
-    gravarCache('reembolsos_janelas', janelas);
-    return { janelas, offline: false };
-  } catch {
-    return { janelas: lerCache<Janela[]>('reembolsos_janelas') ?? [], offline: true };
-  }
-}
-export const guardarJanelas = (janelas: Janela[]) => gravarCache('reembolsos_janelas', janelas);
+/* Valores fixos da solicitação de reembolso (a API grava os mesmos) */
+export const EMPRESA_PAGADORA = '[1026] BEST INVESTIDAS LTDA';
+export const CENTRO_CUSTO_N5 = '[5766] FRANQUIAS';
