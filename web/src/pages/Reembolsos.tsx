@@ -3,6 +3,8 @@ import { api, abrirAnexo, FORMAS, STATUS, type Fornecedor, type Reembolso, type 
 import ReembolsoForm from '../components/ReembolsoForm';
 import { Modal, avisar, msgErro } from '../components/ui';
 import { formatarData, formatarMoeda, mascaraDocumento } from '../formato';
+import { carregarJanelas } from '../api';
+import { descreverDistancia, formatarDia, proximasJanelas } from '../janelas';
 
 type Filtro = Status | 'todos';
 
@@ -14,6 +16,7 @@ export default function Reembolsos() {
   const [form, setForm] = useState<{ item: Reembolso | null } | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [busca, setBusca] = useState('');
+  const [proxima, setProxima] = useState<Date | null>(null);
 
   const carregar = async () => {
     try {
@@ -26,7 +29,10 @@ export default function Reembolsos() {
     } catch (e) { avisar(msgErro(e), 'erro'); }
     finally { setCarregando(false); }
   };
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    carregar();
+    carregarJanelas().then((r) => setProxima(proximasJanelas(r.janelas, 1)[0] ?? null));
+  }, []);
 
   const atualizar = async (id: number, mudanca: Partial<Pick<Reembolso, 'status' | 'data_reembolso'>>) => {
     try {
@@ -72,6 +78,15 @@ export default function Reembolsos() {
         </div>
         <button className="btn btn-primario" onClick={() => setForm({ item: null })}>Nova solicitação</button>
       </div>
+
+      {proxima && (
+        <a href="#janelas" className="faixa-janela">
+          <span className="faixa-rotulo">Próxima janela de pagamento</span>
+          <strong>{formatarDia(proxima)}</strong>
+          <span className="faixa-distancia">{descreverDistancia(proxima)}</span>
+          <span className="faixa-link">Ver calendário ›</span>
+        </a>
+      )}
 
       <div className="filtros">
         <div className="pilulas" role="tablist">

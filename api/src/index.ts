@@ -170,7 +170,9 @@ app.post('/api/login', async (c) => {
 /* Tudo abaixo exige login */
 app.use('/api/*', async (c, next) => {
   const livre = ['/api/setup', '/api/login'];
-  if (livre.includes(c.req.path) || c.req.method === 'OPTIONS') return next();
+  // Os links úteis são públicos para aparecerem na tela de login
+  const publicoGet = c.req.method === 'GET' && c.req.path === '/api/links';
+  if (livre.includes(c.req.path) || publicoGet || c.req.method === 'OPTIONS') return next();
   return autenticar(c as Ctx, next);
 });
 
@@ -645,6 +647,74 @@ app.delete('/api/anexos/:id', async (c) => {
   await c.env.ANEXOS.delete(a.chave_r2);
   await c.env.DB.prepare('DELETE FROM anexos WHERE id = ?').bind(Number(c.req.param('id'))).run();
   return c.json({ ok: true });
+});
+
+/* ---------- Janelas de pagamento ---------- */
+type LinhaJanela = { mes: string; dias: string; observacao: string; atualizado_em: string };
+const mesValido = (m: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m);
+const diasNoMes = (mes: string) => {
+  const [a, m] = mes.split('-').map(Number);
+  return new Date(Date.UTC(a, m, 0)).getUTCDate();
+};
+const janelaPublica = (j: LinhaJanela) => ({
+  mes: j.mes,
+  dias: j.dias ? j.dias.split(',').map(Number).filter(Boolean) : [],
+  observacao: j.observacao,
+  atualizado_em: j.atualizado_em,
+});
+
+app.get('/api/janelas', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM janelas_pagamento ORDER BY mes').all<LinhaJanela>();
+  return c.json(results.map(janelaPublica));
+});
+
+app.put('/api/janelas/:mes', somenteAdmin, async (c) => {
+  const mes = c.req.param('mes') ?? '';
+  if (!mesValido(mes)) return erro(c, 'Mês inválido.');
+  const b = await c.req.json().catch(() => ({}));
+  const max = diasNoMes(mes);
+  const dias = [...new Set<number>((Array.isArray(b.dias) ? b.dias : []).map(Number))]
+    .filter((d) => Number.isInteger(d) && d >= 1 && d <= max)
+    .sort((x, y) => x - y);
+  const observacao = texto(b.observacao).slice(0, 1000);
+  const r = await c.env.DB.prepare(
+    `INSERT INTO janelas_pagamento (mes, dias, observacao, atualizado_em) VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(mes) DO UPDATE SET dias = excluded.dias, observacao = excluded.observacao, atualizado_em = excluded.atualizado_em
+     RETURNING *`,
+  )
+    .bind(mes, dias.join(','), observacao)
+    .first<LinhaJanela>();
+  return c.json(janelaPublica(r!));
+});
+
+/* ---------- Links úteis ---------- */
+app.get('/api/links', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT id, titulo, url FROM links_uteis ORDER BY ordem, id').all();
+  return c.json(results);
+});
+
+// Substitui a lista inteira de links (admin)
+app.put('/api/links', somenteAdmin, async (c) => {
+  const b = await c.req.json().catch(() => ({}));
+  const lista = Array.isArray(b.links) ? b.links : [];
+  const limpos: { titulo: string; url: string }[] = [];
+  for (const l of lista) {
+    const titulo = texto(l?.titulo);
+    const url = texto(l?.url);
+    if (!titulo && !url) continue;
+    if (!titulo) return erro(c, 'Todo link precisa de um nome.');
+    let u: URL;
+    try { u = new URL(url); } catch { return erro(c, `Endereço inválido em "${titulo}".`); }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return erro(c, `Endereço inválido em "${titulo}".`);
+    limpos.push({ titulo, url: u.toString() });
+  }
+  const db = c.env.DB;
+  await db.batch([
+    db.prepare('DELETE FROM links_uteis'),
+    ...limpos.map((l, i) => db.prepare('INSERT INTO links_uteis (titulo, url, ordem) VALUES (?, ?, ?)').bind(l.titulo, l.url, i + 1)),
+  ]);
+  const { results } = await db.prepare('SELECT id, titulo, url FROM links_uteis ORDER BY ordem, id').all();
+  return c.json(results);
 });
 
 app.notFound((c) => c.json({ erro: 'Rota não encontrada.' }, 404));

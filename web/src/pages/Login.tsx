@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, sessao, type Usuario } from '../api';
 import { CampoSenha, msgErro } from '../components/ui';
+import { LinksUteis } from '../components/LinksUteis';
+import { carregarLinks, linksEmCache, type LinkUtil } from '../api';
 
 export default function Login({ aoEntrar }: { aoEntrar: (u: Usuario) => void }) {
   const [setup, setSetup] = useState(false);
@@ -9,16 +11,13 @@ export default function Login({ aoEntrar }: { aoEntrar: (u: Usuario) => void }) 
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [links, setLinks] = useState<LinkUtil[]>(linksEmCache);
 
   useEffect(() => {
+    carregarLinks().then((r) => setLinks(r.links));
     api<{ precisaSetup: boolean }>('/setup')
       .then((r) => setSetup(r.precisaSetup))
-      .catch(() =>
-        setErro(
-          `Não foi possível conectar à API (${import.meta.env.VITE_API_URL || 'VITE_API_URL não configurada'}). ` +
-            'Confira a variável VITE_API_URL na Vercel e se este endereço está em FRONT_URLS no GitHub.',
-        ),
-      );
+      .catch(() => setErro('O sistema está fora do ar no momento. Para solicitar um pagamento, use os links abaixo.'));
   }, []);
 
   const enviar = async (e: FormEvent) => {
@@ -66,6 +65,10 @@ export default function Login({ aoEntrar }: { aoEntrar: (u: Usuario) => void }) 
           {enviando ? 'Aguarde…' : setup ? 'Criar e entrar' : 'Entrar'}
         </button>
       </form>
+      <div className="login-links">
+        <p>Sistema fora do ar? Solicite direto pelos links:</p>
+        <LinksUteis links={links} compacto />
+      </div>
     </div>
   );
 }

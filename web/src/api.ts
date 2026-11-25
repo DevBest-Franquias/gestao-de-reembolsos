@@ -100,3 +100,45 @@ export const STATUS: Record<Status, string> = {
   solicitado: 'Solicitado',
   pago: 'Pago',
 };
+
+/* ---------- Janelas de pagamento e links úteis ---------- */
+export type Janela = { mes: string; dias: number[]; observacao: string; atualizado_em?: string };
+export type LinkUtil = { id?: number; titulo: string; url: string };
+
+/** Links usados quando a API está fora do ar e ainda não há nada guardado no navegador */
+export const LINKS_PADRAO: LinkUtil[] = [
+  { titulo: 'Solicitação de pagamento geral', url: 'https://crm.hub-bnk.com/marketplace/app/621/' },
+  { titulo: 'Solicitação de investidas', url: 'https://hubsmart.bitrix24.site/solicitacao_pag_investidas/' },
+];
+
+const lerCache = <T,>(chave: string): T | null => {
+  try { const v = localStorage.getItem(chave); return v ? (JSON.parse(v) as T) : null; } catch { return null; }
+};
+const gravarCache = (chave: string, valor: unknown) => {
+  try { localStorage.setItem(chave, JSON.stringify(valor)); } catch { /* sem storage */ }
+};
+
+/** Busca os links na API e guarda uma cópia; se a API falhar, usa a última cópia ou os links padrão */
+export async function carregarLinks(): Promise<{ links: LinkUtil[]; offline: boolean }> {
+  try {
+    const links = await api<LinkUtil[]>('/links');
+    gravarCache('reembolsos_links', links);
+    return { links, offline: false };
+  } catch {
+    return { links: lerCache<LinkUtil[]>('reembolsos_links') ?? LINKS_PADRAO, offline: true };
+  }
+}
+export const linksEmCache = () => lerCache<LinkUtil[]>('reembolsos_links') ?? LINKS_PADRAO;
+export const guardarLinks = (links: LinkUtil[]) => gravarCache('reembolsos_links', links);
+
+/** Mesma ideia para as janelas: a última cópia fica no navegador */
+export async function carregarJanelas(): Promise<{ janelas: Janela[]; offline: boolean }> {
+  try {
+    const janelas = await api<Janela[]>('/janelas');
+    gravarCache('reembolsos_janelas', janelas);
+    return { janelas, offline: false };
+  } catch {
+    return { janelas: lerCache<Janela[]>('reembolsos_janelas') ?? [], offline: true };
+  }
+}
+export const guardarJanelas = (janelas: Janela[]) => gravarCache('reembolsos_janelas', janelas);
