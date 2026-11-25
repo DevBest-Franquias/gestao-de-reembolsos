@@ -53,6 +53,7 @@ export default function Solicitantes() {
   const salvar = async (ev: FormEvent) => {
     ev.preventDefault();
     if (!edicao) return;
+    if (edicao.nome.trim().split(/\s+/).length < 2) return avisar('Informe o nome completo (nome e sobrenome).', 'erro');
     const invalido = edicao.cartoes.find((k) => !/^\d{4}$/.test(k.final));
     if (invalido) return avisar('Informe os 4 últimos dígitos de cada cartão.', 'erro');
 
@@ -114,7 +115,7 @@ export default function Solicitantes() {
       </div>
       <div className="tabela-caixa">
         <table className="tabela">
-          <thead><tr><th>Nome</th><th>E-mail</th><th>Chave Pix para reembolso</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
+          <thead><tr><th>Nome completo</th><th>E-mail corporativo</th><th>Chave Pix para reembolso</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
           <tbody>
             {filtrados.map((s) => (
               <tr key={s.id}>
@@ -153,11 +154,11 @@ export default function Solicitantes() {
             <fieldset className="grupo">
               <legend>Dados do solicitante</legend>
               <div className="grade grade-3">
-                <label className="campo"><span>Nome</span>
-                  <input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} required autoFocus />
+                <label className="campo"><span>Nome completo</span>
+                  <input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} placeholder="Nome e sobrenome" required autoFocus />
                 </label>
-                <label className="campo"><span>E-mail</span>
-                  <input type="email" value={edicao.email} onChange={(e) => setEdicao({ ...edicao, email: e.target.value })} required />
+                <label className="campo"><span>E-mail corporativo</span>
+                  <input type="email" value={edicao.email} onChange={(e) => setEdicao({ ...edicao, email: e.target.value })} placeholder="nome@empresa.com.br" required />
                 </label>
                 <label className="campo"><span>Chave Pix para reembolso</span>
                   <input value={edicao.chave_pix} placeholder="CPF, e-mail, telefone ou aleatória" onChange={(e) => setEdicao({ ...edicao, chave_pix: e.target.value })} />

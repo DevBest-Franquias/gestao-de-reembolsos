@@ -126,7 +126,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
           </label>
           {solicitanteId === 'outro' && (
             <label className="campo">
-              <span>Nome</span>
+              <span>Nome completo</span>
               <input value={solNome} onChange={(e) => setSolNome(e.target.value)} required />
             </label>
           )}
