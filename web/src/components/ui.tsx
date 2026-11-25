@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatarMoeda } from '../formato';
 
-export function Modal({ titulo, aberto, aoFechar, children, largo }: {
-  titulo: string; aberto: boolean; aoFechar: () => void; children: ReactNode; largo?: boolean;
+export function Modal({ titulo, aberto, aoFechar, children, largo, extraLargo }: {
+  titulo: string; aberto: boolean; aoFechar: () => void; children: ReactNode; largo?: boolean; extraLargo?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -16,7 +16,7 @@ export function Modal({ titulo, aberto, aoFechar, children, largo }: {
   return (
     <dialog
       ref={ref}
-      className={`modal ${largo ? 'modal-largo' : ''}`}
+      className={`modal ${extraLargo ? 'modal-xl' : largo ? 'modal-largo' : ''}`}
       onCancel={(e) => e.preventDefault()}
       onKeyDown={(e) => { if (e.key === 'Escape') e.preventDefault(); }}
     >

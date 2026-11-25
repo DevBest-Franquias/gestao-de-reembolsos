@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, abrirAnexo, FORMAS, STATUS, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
 import ReembolsoForm from '../components/ReembolsoForm';
+import PainelJanela from '../components/PainelJanela';
 import { Modal, avisar, msgErro } from '../components/ui';
 import { formatarData, formatarMoeda, mascaraDocumento } from '../formato';
 import { carregarJanelas } from '../api';
@@ -169,15 +170,18 @@ export default function Reembolsos() {
         </table>
       </div>
 
-      <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo>
+      <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo extraLargo={!!form && !form.item}>
         {form && (
-          <ReembolsoForm
-            inicial={form.item}
-            solicitantes={solicitantes}
-            fornecedores={fornecedores}
-            aoCancelar={() => setForm(null)}
-            aoSalvar={() => { setForm(null); carregar(); }}
-          />
+          <div className={form.item ? '' : 'form-com-janela'}>
+            <ReembolsoForm
+              inicial={form.item}
+              solicitantes={solicitantes}
+              fornecedores={fornecedores}
+              aoCancelar={() => setForm(null)}
+              aoSalvar={() => { setForm(null); carregar(); }}
+            />
+            {!form.item && <PainelJanela />}
+          </div>
         )}
       </Modal>
     </section>
