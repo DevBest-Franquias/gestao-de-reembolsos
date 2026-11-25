@@ -344,18 +344,16 @@ app.delete('/api/cartoes/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-// Envia (ou troca) o comprovante em PDF do cartão
+// Envia (ou troca) o comprovante do cartão. Aceita qualquer tipo de arquivo.
 app.post('/api/cartoes/:id/comprovante', async (c) => {
   const k = await buscarCartao(c.env.DB, Number(c.req.param('id')));
   if (!k) return erro(c, 'Cartão não encontrado.', 404);
   const form = await c.req.formData();
   const f = form.get('arquivo');
   if (!f || typeof f === 'string') return erro(c, 'Nenhum arquivo enviado.');
-  const ehPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
-  if (!ehPdf) return erro(c, 'O comprovante precisa ser um arquivo PDF.');
   if (f.size > MAX_ANEXO_BYTES) return erro(c, 'O comprovante passa de 20 MB.');
-  const chave = `cartoes/${k.id}/${crypto.randomUUID()}.pdf`;
-  await c.env.ANEXOS.put(chave, f.stream(), { httpMetadata: { contentType: 'application/pdf' } });
+  const chave = `cartoes/${k.id}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
+  await c.env.ANEXOS.put(chave, f.stream(), { httpMetadata: { contentType: f.type || 'application/octet-stream' } });
   if (k.comprovante_chave_r2) await c.env.ANEXOS.delete(k.comprovante_chave_r2);
   const novo = await c.env.DB.prepare(
     'UPDATE cartoes SET comprovante_chave_r2 = ?, comprovante_nome = ?, comprovante_tamanho = ? WHERE id = ? RETURNING *',
@@ -372,8 +370,8 @@ app.get('/api/cartoes/:id/comprovante', async (c) => {
   if (!obj) return erro(c, 'Arquivo não encontrado no armazenamento.', 404);
   return new Response(obj.body, {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(k.comprovante_nome || 'comprovante.pdf')}`,
+      'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(k.comprovante_nome || 'comprovante')}`,
     },
   });
 });

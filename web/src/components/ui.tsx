@@ -8,11 +8,18 @@ export function Modal({ titulo, aberto, aoFechar, children, largo }: {
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
+    // O modal só fecha pelo X: nem clique fora, nem tecla Esc
+    d.setAttribute('closedby', 'none');
     if (aberto && !d.open) d.showModal();
     if (!aberto && d.open) d.close();
   }, [aberto]);
   return (
-    <dialog ref={ref} className={`modal ${largo ? 'modal-largo' : ''}`} onClose={aoFechar} onCancel={aoFechar}>
+    <dialog
+      ref={ref}
+      className={`modal ${largo ? 'modal-largo' : ''}`}
+      onCancel={(e) => e.preventDefault()}
+      onKeyDown={(e) => { if (e.key === 'Escape') e.preventDefault(); }}
+    >
       <header className="modal-topo">
         <h2>{titulo}</h2>
         <button type="button" className="icone-btn" aria-label="Fechar" onClick={aoFechar}>×</button>

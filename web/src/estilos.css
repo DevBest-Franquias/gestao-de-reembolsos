@@ -308,3 +308,4 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
   .cartao-final, .cartao-comprovante { grid-column: 1 / -1; }
   .comprovante-arquivo { flex-wrap: wrap; }
 }
+.modal:focus, .modal:focus-visible { outline: none; }

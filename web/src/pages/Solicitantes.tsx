@@ -16,6 +16,12 @@ type CartaoForm = {
 
 type Edicao = { id?: number; nome: string; email: string; chave_pix: string; cartoes: CartaoForm[]; removidos: number[] };
 
+/** Etiqueta curta com o tipo do arquivo, por exemplo PDF, JPG, PNG */
+const extensao = (nome: string) => {
+  const e = nome.includes('.') ? nome.split('.').pop()!.toUpperCase() : '';
+  return e && e.length <= 4 ? e : 'ARQ';
+};
+
 let seq = 0;
 const novaChave = () => `c${++seq}`;
 
@@ -128,7 +134,7 @@ export default function Solicitantes() {
                       {s.cartoes.map((k) =>
                         k.comprovante ? (
                           <button key={k.id} className="chip-cartao com-pdf" title="Abrir comprovante" onClick={() => abrirComprovante(k.id).catch((e) => avisar(msgErro(e), 'erro'))}>
-                            •••• {k.final} <span className="pdf">PDF</span>
+                            •••• {k.final} <span className="pdf">{extensao(k.comprovante.nome)}</span>
                           </button>
                         ) : (
                           <span key={k.id} className="chip-cartao" title="Sem comprovante">•••• {k.final}</span>
@@ -209,7 +215,6 @@ function LinhaCartao({ indice, cartao, aoMudar, aoExcluir }: {
 
   const escolher = (f: File | undefined) => {
     if (!f) return;
-    if (!(f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) return avisar('O comprovante precisa ser um arquivo PDF.', 'erro');
     if (f.size > 20 * 1024 * 1024) return avisar('O comprovante passa de 20 MB.', 'erro');
     aoMudar({ arquivoNovo: f, removerComprovante: false });
   };
@@ -233,8 +238,8 @@ function LinhaCartao({ indice, cartao, aoMudar, aoExcluir }: {
         </div>
       </label>
       <div className="campo cartao-comprovante">
-        <span>Comprovante do número do cartão (PDF)</span>
-        <input ref={entrada} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => { escolher(e.target.files?.[0]); e.target.value = ''; }} />
+        <span>Comprovante do número do cartão</span>
+        <input ref={entrada} type="file" hidden onChange={(e) => { escolher(e.target.files?.[0]); e.target.value = ''; }} />
         {temComprovante ? (
           <div className="comprovante-arquivo">
             {cartao.arquivoNovo ? (
@@ -246,11 +251,11 @@ function LinhaCartao({ indice, cartao, aoMudar, aoExcluir }: {
             )}
             <span className="mudo pequeno">{tamanhoArquivo(cartao.arquivoNovo?.size ?? cartao.comprovante!.tamanho)}</span>
             <button type="button" className="btn btn-fantasma btn-pequeno" onClick={() => entrada.current?.click()}>Trocar</button>
-            <button type="button" className="btn btn-fantasma btn-pequeno perigo" onClick={removerComprovante}>Excluir PDF</button>
+            <button type="button" className="btn btn-fantasma btn-pequeno perigo" onClick={removerComprovante}>Excluir arquivo</button>
           </div>
         ) : (
           <button type="button" className="soltar soltar-compacto" onClick={() => entrada.current?.click()}>
-            <strong>Anexar PDF</strong>
+            <strong>Anexar arquivo</strong> <span className="mudo">PDF, imagem ou outro, até 20 MB</span>
           </button>
         )}
       </div>
