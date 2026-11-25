@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, sessao, type Usuario } from '../api';
-import { msgErro } from '../components/ui';
+import { CampoSenha, msgErro } from '../components/ui';
 
 export default function Login({ aoEntrar }: { aoEntrar: (u: Usuario) => void }) {
   const [setup, setSetup] = useState(false);
@@ -59,7 +59,7 @@ export default function Login({ aoEntrar }: { aoEntrar: (u: Usuario) => void }) 
         </label>
         <label className="campo">
           <span>Senha</span>
-          <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={setup ? 8 : undefined} />
+          <CampoSenha valor={senha} aoMudar={setSenha} minimo={setup ? 8 : undefined} autoComplete={setup ? "new-password" : "current-password"} />
         </label>
         {erro && <p className="erro">{erro}</p>}
         <button className="btn btn-primario btn-largo" disabled={enviando}>

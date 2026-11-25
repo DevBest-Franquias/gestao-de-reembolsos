@@ -1,24 +1,41 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Usuario } from '../api';
-import { Modal, avisar, msgErro } from '../components/ui';
+import { CampoSenha, Modal, avisar, msgErro } from '../components/ui';
 
 type Novo = { nome: string; email: string; senha: string; papel: 'admin' | 'usuario' };
 
 export default function Usuarios({ eu }: { eu: Usuario }) {
   const [lista, setLista] = useState<Usuario[]>([]);
   const [novo, setNovo] = useState<Novo | null>(null);
+  const [redefinir, setRedefinir] = useState<Usuario | null>(null);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
   const carregar = () => api<Usuario[]>('/usuarios').then(setLista).catch((e) => avisar(msgErro(e), 'erro'));
   useEffect(() => { carregar(); }, []);
 
   const salvar = async (e: FormEvent) => {
     e.preventDefault();
+    setSalvando(true);
     try {
       await api('/usuarios', { method: 'POST', json: novo });
       avisar('Usuário criado. Passe o e-mail e a senha para a pessoa.');
       setNovo(null);
       carregar();
     } catch (e) { avisar(msgErro(e), 'erro'); }
+    finally { setSalvando(false); }
+  };
+
+  const salvarSenha = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!redefinir) return;
+    setSalvando(true);
+    try {
+      await api(`/usuarios/${redefinir.id}/senha`, { method: 'PUT', json: { senha: novaSenha } });
+      avisar(redefinir.id === eu.id ? 'Sua senha foi alterada.' : `Senha de ${redefinir.nome} redefinida. Passe a nova senha para a pessoa.`);
+      setRedefinir(null);
+    } catch (e) { avisar(msgErro(e), 'erro'); }
+    finally { setSalvando(false); }
   };
 
   const excluir = async (u: Usuario) => {
@@ -32,7 +49,7 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
       <div className="pagina-topo">
         <div>
           <h1>Usuários</h1>
-          <p className="mudo">Quem pode entrar no sistema. Administradores também gerenciam esta lista.</p>
+          <p className="mudo">Quem pode entrar no sistema. Administradores também gerenciam esta lista e redefinem senhas.</p>
         </div>
         <button className="btn btn-primario" onClick={() => setNovo({ nome: '', email: '', senha: '', papel: 'usuario' })}>Novo usuário</button>
       </div>
@@ -42,10 +59,13 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
           <tbody>
             {lista.map((u) => (
               <tr key={u.id}>
-                <td>{u.nome}</td>
+                <td>{u.nome}{u.id === eu.id && <span className="mudo pequeno"> (você)</span>}</td>
                 <td>{u.email}</td>
                 <td><span className={`selo ${u.papel === 'admin' ? 'selo-roxo' : 'selo-cinza'}`}>{u.papel === 'admin' ? 'Administrador' : 'Usuário'}</span></td>
                 <td className="acoes">
+                  <button className="btn btn-fantasma btn-pequeno" onClick={() => { setNovaSenha(''); setRedefinir(u); }}>
+                    {u.id === eu.id ? 'Alterar minha senha' : 'Redefinir senha'}
+                  </button>
                   {u.id !== eu.id && <button className="btn btn-fantasma btn-pequeno perigo" onClick={() => excluir(u)}>Remover</button>}
                 </td>
               </tr>
@@ -53,6 +73,7 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
           </tbody>
         </table>
       </div>
+
       <Modal titulo="Novo usuário" aberto={!!novo} aoFechar={() => setNovo(null)}>
         {novo && (
           <form onSubmit={salvar} className="form">
@@ -63,7 +84,8 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
               <input type="email" value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} required />
             </label>
             <label className="campo"><span>Senha inicial</span>
-              <input type="text" value={novo.senha} minLength={8} onChange={(e) => setNovo({ ...novo, senha: e.target.value })} required />
+              <CampoSenha valor={novo.senha} aoMudar={(v) => setNovo({ ...novo, senha: v })} minimo={8} autoComplete="new-password" />
+              <span className="mudo pequeno">Pelo menos 8 caracteres.</span>
             </label>
             <label className="campo"><span>Perfil</span>
               <select value={novo.papel} onChange={(e) => setNovo({ ...novo, papel: e.target.value as Novo['papel'] })}>
@@ -73,7 +95,31 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
             </label>
             <div className="form-rodape">
               <button type="button" className="btn btn-fantasma" onClick={() => setNovo(null)}>Cancelar</button>
-              <button className="btn btn-primario">Criar usuário</button>
+              <button className="btn btn-primario" disabled={salvando}>{salvando ? 'Salvando…' : 'Criar usuário'}</button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        titulo={redefinir?.id === eu.id ? 'Alterar minha senha' : `Redefinir senha de ${redefinir?.nome ?? ''}`}
+        aberto={!!redefinir}
+        aoFechar={() => setRedefinir(null)}
+      >
+        {redefinir && (
+          <form onSubmit={salvarSenha} className="form">
+            <p className="mudo" style={{ margin: 0 }}>
+              {redefinir.id === eu.id
+                ? 'Você continua conectado depois de trocar a senha.'
+                : `${redefinir.nome} será desconectado e vai precisar entrar com a nova senha.`}
+            </p>
+            <label className="campo"><span>Nova senha</span>
+              <CampoSenha valor={novaSenha} aoMudar={setNovaSenha} minimo={8} autoFocus autoComplete="new-password" />
+              <span className="mudo pequeno">Pelo menos 8 caracteres.</span>
+            </label>
+            <div className="form-rodape">
+              <button type="button" className="btn btn-fantasma" onClick={() => setRedefinir(null)}>Cancelar</button>
+              <button className="btn btn-primario" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar nova senha'}</button>
             </div>
           </form>
         )}

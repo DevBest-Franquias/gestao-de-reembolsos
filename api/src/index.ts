@@ -6,6 +6,8 @@ type Env = {
   DB: D1Database;
   ANEXOS: R2Bucket;
   ALLOWED_ORIGINS: string;
+  /** Repetições do PBKDF2. O plano gratuito do Workers limita 10 ms de CPU por requisição; no plano pago pode subir. */
+  HASH_ITERACOES?: string;
 };
 
 type Usuario = { id: number; nome: string; email: string; papel: 'admin' | 'usuario' };
@@ -44,11 +46,20 @@ const hex = (buf: ArrayBuffer | Uint8Array) =>
   [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const unhex = (s: string) => new Uint8Array(s.match(/.{2}/g)!.map((h) => parseInt(h, 16)));
 
-async function hashSenha(senha: string, saltHex?: string) {
+// O hash é guardado como "<iteracoes>$<hex>" para permitir mudar as repetições sem invalidar senhas antigas
+async function hashSenha(senha: string, iteracoes: number, saltHex?: string) {
   const salt = saltHex ? unhex(saltHex) : crypto.getRandomValues(new Uint8Array(16));
   const chave = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, chave, 256);
-  return { hash: hex(bits), salt: hex(salt) };
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iteracoes, hash: 'SHA-256' }, chave, 256);
+  return { hash: `${iteracoes}$${hex(bits)}`, salt: hex(salt) };
+}
+
+const iteracoesPadrao = (env: Env) => Math.min(Math.max(Number(env.HASH_ITERACOES) || 10000, 1000), 100000);
+
+async function conferirSenha(senha: string, hashGuardado: string, salt: string) {
+  const [it, valor] = hashGuardado.includes('$') ? hashGuardado.split('$') : ['100000', hashGuardado];
+  const { hash } = await hashSenha(senha, Number(it), salt);
+  return iguais(hash, `${it}$${valor}`);
 }
 
 function iguais(a: string, b: string) {
@@ -131,7 +142,7 @@ app.post('/api/setup', async (c) => {
   const senha = String(b.senha ?? '');
   if (!nome || !emailValido(email)) return erro(c, 'Informe nome e e-mail válidos.');
   if (senha.length < 8) return erro(c, 'A senha precisa ter pelo menos 8 caracteres.');
-  const { hash, salt } = await hashSenha(senha);
+  const { hash, salt } = await hashSenha(senha, iteracoesPadrao(c.env));
   const ins = await c.env.DB.prepare(
     "INSERT INTO usuarios (nome, email, senha_hash, senha_salt, papel) VALUES (?, ?, ?, ?, 'admin')",
   )
@@ -150,8 +161,7 @@ app.post('/api/login', async (c) => {
     Usuario & { senha_hash: string; senha_salt: string }
   >();
   if (!u) return erro(c, 'E-mail ou senha incorretos.', 401);
-  const { hash } = await hashSenha(senha, u.senha_salt);
-  if (!iguais(hash, u.senha_hash)) return erro(c, 'E-mail ou senha incorretos.', 401);
+  if (!(await conferirSenha(senha, u.senha_hash, u.senha_salt))) return erro(c, 'E-mail ou senha incorretos.', 401);
   await c.env.DB.prepare('DELETE FROM sessoes WHERE expira_em < ?').bind(new Date().toISOString()).run();
   const token = await criarSessao(c.env.DB, u.id);
   return c.json({ token, usuario: { id: u.id, nome: u.nome, email: u.email, papel: u.papel } });
@@ -176,7 +186,7 @@ app.put('/api/me/senha', async (c) => {
   const b = await c.req.json().catch(() => ({}));
   const nova = String(b.senha ?? '');
   if (nova.length < 8) return erro(c, 'A senha precisa ter pelo menos 8 caracteres.');
-  const { hash, salt } = await hashSenha(nova);
+  const { hash, salt } = await hashSenha(nova, iteracoesPadrao(c.env));
   await c.env.DB.prepare('UPDATE usuarios SET senha_hash = ?, senha_salt = ? WHERE id = ?')
     .bind(hash, salt, c.get('usuario').id)
     .run();
@@ -199,11 +209,27 @@ app.post('/api/usuarios', somenteAdmin, async (c) => {
   if (senha.length < 8) return erro(c, 'A senha precisa ter pelo menos 8 caracteres.');
   const existe = await c.env.DB.prepare('SELECT id FROM usuarios WHERE email = ?').bind(email).first();
   if (existe) return erro(c, 'Já existe um usuário com esse e-mail.', 409);
-  const { hash, salt } = await hashSenha(senha);
+  const { hash, salt } = await hashSenha(senha, iteracoesPadrao(c.env));
   await c.env.DB.prepare('INSERT INTO usuarios (nome, email, senha_hash, senha_salt, papel) VALUES (?, ?, ?, ?, ?)')
     .bind(nome, email, hash, salt, papel)
     .run();
   return c.json({ ok: true }, 201);
+});
+
+// Redefinir a senha de um usuário (admin). Encerra as sessões abertas dele.
+app.put('/api/usuarios/:id/senha', somenteAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const b = await c.req.json().catch(() => ({}));
+  const nova = String(b.senha ?? '');
+  if (nova.length < 8) return erro(c, 'A senha precisa ter pelo menos 8 caracteres.');
+  const existe = await c.env.DB.prepare('SELECT id FROM usuarios WHERE id = ?').bind(id).first();
+  if (!existe) return erro(c, 'Usuário não encontrado.', 404);
+  const { hash, salt } = await hashSenha(nova, iteracoesPadrao(c.env));
+  await c.env.DB.prepare('UPDATE usuarios SET senha_hash = ?, senha_salt = ? WHERE id = ?').bind(hash, salt, id).run();
+  if (id !== c.get('usuario').id) {
+    await c.env.DB.prepare('DELETE FROM sessoes WHERE usuario_id = ?').bind(id).run();
+  }
+  return c.json({ ok: true });
 });
 
 app.delete('/api/usuarios/:id', somenteAdmin, async (c) => {
