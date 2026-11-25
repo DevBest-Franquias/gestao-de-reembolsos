@@ -14,7 +14,7 @@ type CartaoForm = {
   removerComprovante?: boolean;
 };
 
-type Edicao = { id?: number; nome: string; cpf: string; email: string; chave_pix: string; cartoes: CartaoForm[]; removidos: number[] };
+type Edicao = { id?: number; nome: string; cpf: string; email: string; banco: string; agencia: string; conta: string; chave_pix: string; cartoes: CartaoForm[]; removidos: number[] };
 
 /** Etiqueta curta com o tipo do arquivo, por exemplo PDF, JPG, PNG */
 const extensao = (nome: string) => {
@@ -42,9 +42,9 @@ export default function Solicitantes() {
   const carregar = () => api<Solicitante[]>('/solicitantes').then(setLista).catch((e) => avisar(msgErro(e), 'erro'));
   useEffect(() => { carregar(); }, []);
 
-  const abrirNovo = () => setEdicao({ nome: '', cpf: '', email: '', chave_pix: '', cartoes: [], removidos: [] });
+  const abrirNovo = () => setEdicao({ nome: '', cpf: '', email: '', banco: '', agencia: '', conta: '', chave_pix: '', cartoes: [], removidos: [] });
   const abrirEdicao = (s: Solicitante) =>
-    setEdicao({ id: s.id, nome: s.nome, cpf: mascaraDocumento(s.cpf ?? ''), email: s.email, chave_pix: s.chave_pix ?? '', cartoes: (s.cartoes ?? []).map(paraForm), removidos: [] });
+    setEdicao({ id: s.id, nome: s.nome, cpf: mascaraDocumento(s.cpf ?? ''), email: s.email, banco: s.banco ?? '', agencia: s.agencia ?? '', conta: s.conta ?? '', chave_pix: s.chave_pix ?? '', cartoes: (s.cartoes ?? []).map(paraForm), removidos: [] });
 
   const mudarCartao = (chave: string, mudanca: Partial<CartaoForm>) =>
     setEdicao((e) => e && { ...e, cartoes: e.cartoes.map((k) => (k.chave === chave ? { ...k, ...mudanca } : k)) });
@@ -66,7 +66,10 @@ export default function Solicitantes() {
 
     setSalvando(true);
     try {
-      const dados = { nome: edicao.nome, cpf: edicao.cpf, email: edicao.email, chave_pix: edicao.chave_pix };
+      const dados = {
+        nome: edicao.nome, cpf: edicao.cpf, email: edicao.email,
+        banco: edicao.banco, agencia: edicao.agencia, conta: edicao.conta, chave_pix: edicao.chave_pix,
+      };
       const s = await api<Solicitante>(edicao.id ? `/solicitantes/${edicao.id}` : '/solicitantes', {
         method: edicao.id ? 'PUT' : 'POST',
         json: dados,
@@ -105,7 +108,7 @@ export default function Solicitantes() {
 
   const t = busca.toLowerCase();
   const filtrados = lista.filter((s) =>
-    `${s.nome} ${s.cpf ?? ''} ${mascaraDocumento(s.cpf ?? '')} ${s.email} ${s.chave_pix ?? ''} ${(s.cartoes ?? []).map((k) => k.final).join(' ')}`.toLowerCase().includes(t),
+    `${s.nome} ${s.cpf ?? ''} ${mascaraDocumento(s.cpf ?? '')} ${s.email} ${s.banco ?? ''} ${s.chave_pix ?? ''} ${(s.cartoes ?? []).map((k) => k.final).join(' ')}`.toLowerCase().includes(t),
   );
 
   return (
@@ -118,18 +121,18 @@ export default function Solicitantes() {
         <button className="btn btn-primario" onClick={abrirNovo}>Novo solicitante</button>
       </div>
       <div className="filtros">
-        <input className="busca" placeholder="Buscar por nome, CPF, e-mail, Pix ou final do cartão" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input className="busca" placeholder="Buscar por nome, CPF, e-mail, banco, Pix ou final do cartão" value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
       <div className="tabela-caixa">
         <table className="tabela">
-          <thead><tr><th>Nome completo</th><th>CPF</th><th>E-mail corporativo</th><th>Chave Pix para reembolso</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
+          <thead><tr><th>Nome completo</th><th>CPF</th><th>E-mail corporativo</th><th>Dados bancários</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
           <tbody>
             {filtrados.map((s) => (
               <tr key={s.id}>
                 <td className="forte">{s.nome}</td>
                 <td className="mono">{s.cpf ? mascaraDocumento(s.cpf) : <span className="mudo">Não informado</span>}</td>
                 <td>{s.email}</td>
-                <td>{s.chave_pix || <span className="mudo">Não informada</span>}</td>
+                <td><ResumoBancario s={s} /></td>
                 <td>
                   {(s.cartoes ?? []).length === 0 ? <span className="mudo">Nenhum</span> : (
                     <div className="cartoes-celula">
@@ -161,7 +164,7 @@ export default function Solicitantes() {
           <form onSubmit={salvar} className="form">
             <fieldset className="grupo">
               <legend>Dados do solicitante</legend>
-              <div className="grade grade-2">
+              <div className="grade grade-3">
                 <label className="campo"><span>Nome completo</span>
                   <input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} placeholder="Nome e sobrenome" required autoFocus />
                 </label>
@@ -178,7 +181,22 @@ export default function Solicitantes() {
                 <label className="campo"><span>E-mail corporativo</span>
                   <input type="email" value={edicao.email} onChange={(e) => setEdicao({ ...edicao, email: e.target.value })} placeholder="nome@empresa.com.br" required />
                 </label>
-                <label className="campo"><span>Chave Pix para reembolso</span>
+              </div>
+            </fieldset>
+
+            <fieldset className="grupo">
+              <legend>Dados bancários para reembolso</legend>
+              <div className="grade grade-bancaria">
+                <label className="campo"><span>Banco</span>
+                  <input value={edicao.banco} placeholder="Ex.: 341 Itaú" onChange={(e) => setEdicao({ ...edicao, banco: e.target.value })} />
+                </label>
+                <label className="campo"><span>Agência</span>
+                  <input value={edicao.agencia} placeholder="0000" onChange={(e) => setEdicao({ ...edicao, agencia: e.target.value })} />
+                </label>
+                <label className="campo"><span>Conta</span>
+                  <input value={edicao.conta} placeholder="00000-0" onChange={(e) => setEdicao({ ...edicao, conta: e.target.value })} />
+                </label>
+                <label className="campo"><span>Chave Pix</span>
                   <input value={edicao.chave_pix} placeholder="CPF, e-mail, telefone ou aleatória" onChange={(e) => setEdicao({ ...edicao, chave_pix: e.target.value })} />
                 </label>
               </div>
@@ -272,6 +290,18 @@ function LinhaCartao({ indice, cartao, aoMudar, aoExcluir }: {
         )}
       </div>
       <button type="button" className="icone-btn cartao-excluir" aria-label={`Excluir cartão ${indice}`} title="Excluir cartão" onClick={aoExcluir}>×</button>
+    </div>
+  );
+}
+
+/** Resumo dos dados bancários numa célula da tabela */
+export function ResumoBancario({ s }: { s: Pick<Solicitante, 'banco' | 'agencia' | 'conta' | 'chave_pix'> }) {
+  const conta = [s.banco, s.agencia && `Ag. ${s.agencia}`, s.conta && `Conta ${s.conta}`].filter(Boolean).join(' · ');
+  if (!conta && !s.chave_pix) return <span className="mudo">Não informados</span>;
+  return (
+    <div className="resumo-bancario">
+      {conta && <span>{conta}</span>}
+      {s.chave_pix && <span><span className="rotulo-pix">Pix</span> {s.chave_pix}</span>}
     </div>
   );
 }

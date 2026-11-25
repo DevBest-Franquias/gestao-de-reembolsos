@@ -3,6 +3,23 @@ import { api, abrirAnexo, enviarAnexos, FORMAS, type Anexo, type Forma, type For
 import { documentoValido, mascaraDocumento, soDigitos, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
+const PROPRIO = 'proprio';
+
+/** Dados bancários do solicitante, para conferência */
+function DadosBancarios({ s }: { s: Solicitante }) {
+  const conta = [s.banco, s.agencia && `Ag. ${s.agencia}`, s.conta && `Conta ${s.conta}`].filter(Boolean).join(' · ');
+  if (!conta && !s.chave_pix) {
+    return <p className="nota nota-alerta" style={{ margin: '10px 0 0' }}>Esse solicitante não tem dados bancários no cadastro. Complete em Solicitantes para receber o reembolso.</p>;
+  }
+  return (
+    <div className="dados-bancarios-form">
+      <span className="db-rotulo">Dados bancários para reembolso</span>
+      {conta && <span>{conta}</span>}
+      {s.chave_pix && <span><span className="rotulo-pix">Pix</span> {s.chave_pix}</span>}
+    </div>
+  );
+}
+
 const DICA_ANEXO = 'Nota fiscal / boleto / chave pix / outros (podem ser enviados vários arquivos separados)';
 
 type Props = {
@@ -22,8 +39,11 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
   const [solCpf, setSolCpf] = useState(inicial?.solicitante_cpf ? mascaraDocumento(inicial.solicitante_cpf) : '');
   const [salvarSolicitante, setSalvarSolicitante] = useState(true);
 
-  const [fornNovo, setFornNovo] = useState<'' | 'sim' | 'nao'>(inicial ? (inicial.fornecedor_novo ? 'sim' : 'nao') : '');
-  const [fornecedorId, setFornecedorId] = useState(inicial?.fornecedor_id ? String(inicial.fornecedor_id) : '');
+  // Padrão: quem pagou foi o próprio solicitante, então o fornecedor não é novo e é ele mesmo
+  const [fornNovo, setFornNovo] = useState<'' | 'sim' | 'nao'>(inicial ? (inicial.fornecedor_novo ? 'sim' : 'nao') : 'nao');
+  const [fornecedorId, setFornecedorId] = useState(
+    !inicial ? PROPRIO : inicial.fornecedor_eh_solicitante ? PROPRIO : inicial.fornecedor_id ? String(inicial.fornecedor_id) : '',
+  );
   const [fornNome, setFornNome] = useState(inicial?.fornecedor_nome ?? '');
   const [fornDoc, setFornDoc] = useState(inicial ? mascaraDocumento(inicial.fornecedor_documento) : '');
 
@@ -31,7 +51,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
   const [dataPagamento, setDataPagamento] = useState(inicial?.data_pagamento ?? '');
   const [valor, setValor] = useState(inicial?.valor_centavos ?? 0);
   const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
-  const [forma, setForma] = useState<Forma | ''>(inicial?.forma_pagamento ?? '');
+  const [forma, setForma] = useState<Forma | ''>(inicial?.forma_pagamento ?? 'pix');
 
   const [anexos, setAnexos] = useState<Anexo[]>(inicial?.anexos ?? []);
   const [novosArquivos, setNovosArquivos] = useState<File[]>([]);
@@ -47,6 +67,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
 
   const escolherFornecedor = (id: string) => {
     setFornecedorId(id);
+    if (id === PROPRIO) { setFornNome(''); setFornDoc(''); return; }
     const f = fornecedores.find((x) => String(x.id) === id);
     setFornNome(f?.nome ?? '');
     setFornDoc(f ? mascaraDocumento(f.documento) : '');
@@ -54,7 +75,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
 
   const mudarFornNovo = (v: '' | 'sim' | 'nao') => {
     setFornNovo(v);
-    setFornecedorId('');
+    setFornecedorId(v === 'nao' ? PROPRIO : '');
     setFornNome('');
     setFornDoc('');
   };
@@ -90,7 +111,8 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
         solicitante_cpf: solCpf,
         salvar_solicitante: solicitanteId === 'outro' && salvarSolicitante,
         fornecedor_novo: fornNovo === 'sim',
-        fornecedor_id: fornNovo === 'nao' ? Number(fornecedorId) : null,
+        fornecedor_proprio: fornecedorProprio,
+        fornecedor_id: fornNovo === 'nao' && !fornecedorProprio ? Number(fornecedorId) : null,
         fornecedor_nome: fornNome,
         fornecedor_documento: fornDoc,
         numero_documento: numeroDoc,
@@ -114,6 +136,8 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
   };
 
   const solicitanteDoCadastro = solicitanteId !== '' && solicitanteId !== 'outro';
+  const solicitanteSel = solicitantes.find((x) => String(x.id) === solicitanteId);
+  const fornecedorProprio = fornNovo === 'nao' && fornecedorId === PROPRIO;
   const cadastroSemCpf = solicitanteDoCadastro && !solicitantes.find((x) => String(x.id) === solicitanteId)?.cpf;
 
   return (
@@ -153,6 +177,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
             <input type="email" value={solEmail} onChange={(e) => setSolEmail(e.target.value)} readOnly={solicitanteDoCadastro} required />
           </label>
         </div>
+        {solicitanteSel && <DadosBancarios s={solicitanteSel} />}
         {solicitanteId === 'outro' && (
           <label className="marcar">
             <input type="checkbox" checked={salvarSolicitante} onChange={(e) => setSalvarSolicitante(e.target.checked)} />
@@ -177,13 +202,17 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
               <label className="campo">
                 <span>Nome / Razão social</span>
                 <select value={fornecedorId} onChange={(e) => escolherFornecedor(e.target.value)} required>
-                  <option value="">Selecione</option>
-                  {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  <option value={PROPRIO}>O próprio solicitante</option>
+                  {fornecedores.length > 0 && (
+                    <optgroup label="Fornecedores cadastrados">
+                      {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                    </optgroup>
+                  )}
                 </select>
               </label>
               <label className="campo">
                 <span>CNPJ / CPF</span>
-                <input value={fornDoc} readOnly placeholder="Preenchido ao escolher" />
+                <input value={fornecedorProprio ? solCpf : fornDoc} readOnly placeholder={fornecedorProprio ? 'CPF do solicitante' : 'Preenchido ao escolher'} />
               </label>
             </>
           )}
@@ -210,6 +239,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
           </p>
         )}
         {fornNovo === 'sim' && !jaCadastrado && <p className="mudo pequeno">O fornecedor será adicionado ao cadastro ao salvar.</p>}
+        {fornecedorProprio && <p className="mudo pequeno">Use quando você mesmo pagou pela empresa. O reembolso vai para os dados bancários do solicitante.</p>}
       </fieldset>
 
       <fieldset className="grupo">

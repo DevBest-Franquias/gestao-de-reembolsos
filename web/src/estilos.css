@@ -459,3 +459,14 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
   .painel-janela { position: static; order: -1; }
 }
 @media (max-width: 1000px) { .pj-calendario { display: none; } }
+
+.grade-bancaria { grid-template-columns: 2fr 1fr 1.3fr 2fr; }
+.resumo-bancario { display: flex; flex-direction: column; gap: 2px; font-size: 13px; white-space: nowrap; }
+.rotulo-pix { font-size: 10px; font-weight: 800; background: var(--verde-50); color: var(--verde); border-radius: 4px; padding: 0 5px; }
+@media (max-width: 860px) { .grade-bancaria { grid-template-columns: 1fr 1fr; } }
+
+.dados-bancarios-form {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 12px; padding: 10px 14px;
+  border-radius: 14px; background: var(--n-50); border: 1px solid var(--n-200); font-size: 13px; color: var(--n-900);
+}
+.db-rotulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--n-500); width: 100%; }

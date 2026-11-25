@@ -276,10 +276,13 @@ async function lerSolicitante(c: Ctx) {
   const email = texto(b.email).toLowerCase();
   const chave_pix = texto(b.chave_pix);
   const cpf = soDigitos(b.cpf);
+  const banco = texto(b.banco).slice(0, 100);
+  const agencia = texto(b.agencia).slice(0, 20);
+  const conta = texto(b.conta).slice(0, 30);
   if (!nome) return { falha: 'Informe o nome do solicitante.' };
   if (!cpfValido(cpf)) return { falha: 'CPF do solicitante inválido.' };
   if (!emailValido(email)) return { falha: 'Informe um e-mail válido.' };
-  return { nome, email, chave_pix, cpf };
+  return { nome, email, chave_pix, cpf, banco, agencia, conta };
 }
 
 const cpfEmUso = (db: D1Database, cpf: string, ignorarId = 0) =>
@@ -290,8 +293,8 @@ app.post('/api/solicitantes', async (c) => {
   if ('falha' in d) return erro(c, d.falha!);
   const outro = await cpfEmUso(c.env.DB, d.cpf);
   if (outro) return erro(c, `Esse CPF já está cadastrado para ${outro.nome}.`, 409);
-  const r = await c.env.DB.prepare('INSERT INTO solicitantes (nome, email, chave_pix, cpf) VALUES (?, ?, ?, ?) RETURNING *')
-    .bind(d.nome, d.email, d.chave_pix, d.cpf)
+  const r = await c.env.DB.prepare('INSERT INTO solicitantes (nome, email, chave_pix, cpf, banco, agencia, conta) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *')
+    .bind(d.nome, d.email, d.chave_pix, d.cpf, d.banco, d.agencia, d.conta)
     .first();
   return c.json({ ...r, cartoes: [] }, 201);
 });
@@ -302,8 +305,8 @@ app.put('/api/solicitantes/:id', async (c) => {
   const id = Number(c.req.param('id'));
   const outro = await cpfEmUso(c.env.DB, d.cpf, id);
   if (outro) return erro(c, `Esse CPF já está cadastrado para ${outro.nome}.`, 409);
-  const r = await c.env.DB.prepare('UPDATE solicitantes SET nome = ?, email = ?, chave_pix = ?, cpf = ? WHERE id = ? RETURNING *')
-    .bind(d.nome, d.email, d.chave_pix, d.cpf, id)
+  const r = await c.env.DB.prepare('UPDATE solicitantes SET nome = ?, email = ?, chave_pix = ?, cpf = ?, banco = ?, agencia = ?, conta = ? WHERE id = ? RETURNING *')
+    .bind(d.nome, d.email, d.chave_pix, d.cpf, d.banco, d.agencia, d.conta, id)
     .first();
   if (!r) return erro(c, 'Solicitante não encontrado.', 404);
   return c.json(r);
@@ -497,11 +500,17 @@ async function lerReembolso(c: Ctx) {
   }
 
   // Fornecedor: existente no cadastro ou novo
+  // Fornecedor pode ser o próprio solicitante (pagou algo pela empresa)
+  const fornecedor_eh_solicitante = !b.fornecedor_novo && b.fornecedor_proprio ? 1 : 0;
   const fornecedor_novo = b.fornecedor_novo ? 1 : 0;
   let fornecedor_id: number | null = b.fornecedor_id ? Number(b.fornecedor_id) : null;
   let fornecedor_nome = texto(b.fornecedor_nome);
   let fornecedor_documento = soDigitos(b.fornecedor_documento);
-  if (!fornecedor_novo && fornecedor_id) {
+  if (fornecedor_eh_solicitante) {
+    fornecedor_id = null;
+    fornecedor_nome = solicitante_nome;
+    fornecedor_documento = solicitante_cpf;
+  } else if (!fornecedor_novo && fornecedor_id) {
     const f = await db.prepare('SELECT * FROM fornecedores WHERE id = ?').bind(fornecedor_id).first<{ nome: string; documento: string }>();
     if (!f) return { falha: 'Fornecedor não encontrado.' };
     fornecedor_nome = f.nome;
@@ -534,6 +543,7 @@ async function lerReembolso(c: Ctx) {
     solicitante_email,
     solicitante_cpf,
     fornecedor_novo,
+    fornecedor_eh_solicitante,
     fornecedor_id,
     fornecedor_nome,
     fornecedor_documento,
@@ -551,6 +561,7 @@ const CAMPOS = [
   'solicitante_email',
   'solicitante_cpf',
   'fornecedor_novo',
+  'fornecedor_eh_solicitante',
   'fornecedor_id',
   'fornecedor_nome',
   'fornecedor_documento',
