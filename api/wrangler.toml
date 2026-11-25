@@ -1,0 +1,17 @@
+name = "reembolsos-api"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+
+[vars]
+# Domínios do front autorizados a chamar a API (separados por vírgula)
+ALLOWED_ORIGINS = "http://localhost:5173"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reembolsos"
+database_id = "COLE_AQUI_O_ID_DO_D1"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "ANEXOS"
+bucket_name = "reembolsos-anexos"
