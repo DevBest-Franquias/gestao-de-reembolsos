@@ -22,61 +22,47 @@ Sistema interno da Best Franquias para registrar solicitações de reembolso e a
 
 ## Configuração (uma vez só)
 
-### 1. Cloudflare: banco e armazenamento
+### 1. API no Cloudflare, pelo GitHub
 
-Com o [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (já vem como dependência da pasta `api/`):
+Em **GitHub > Settings > Secrets and variables > Actions**:
 
-```bash
-cd api
-npm install
-npx wrangler login
-npx wrangler d1 create reembolsos
-npx wrangler r2 bucket create reembolsos-anexos
-```
+**Secrets** (aba Secrets):
 
-O comando `d1 create` mostra um `database_id`. Copie e cole em `api/wrangler.toml` no lugar de `COLE_AQUI_O_ID_DO_D1`.
+| Nome | Valor |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Token do Cloudflare com **Workers Scripts: Edit**, **D1: Edit**, **Workers R2 Storage: Edit** e **Account Settings: Read** (o modelo **Edit Cloudflare Workers** + D1 e R2 resolve) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare > Workers e Pages, na lateral direita |
 
-Também pelo painel: **Workers e Pages > D1** e **R2 > Criar bucket**, com os mesmos nomes.
+**Variables** (aba Variables):
 
-### 2. Cloudflare: publicar a API
+| Nome | Valor |
+|---|---|
+| `FRONT_URLS` | Endereço do front na Vercel, por exemplo `https://reembolsos.vercel.app`. Vários separados por vírgula. Pode deixar para depois do passo 2. |
 
-```bash
-npx wrangler d1 migrations apply reembolsos --remote
-npx wrangler deploy
-```
+Depois vá em **Actions > Deploy da API (Cloudflare) > Run workflow**. O workflow:
 
-O deploy mostra o endereço da API, algo como `https://reembolsos-api.SEU-SUBDOMINIO.workers.dev`.
+1. Cria o banco D1 `reembolsos`, se ainda não existir
+2. Cria o bucket R2 `reembolsos-anexos`, se ainda não existir
+3. Cria ou atualiza as tabelas
+4. Publica a API
 
-### 3. Vercel: publicar o front
+No log do passo **Publicar Worker** aparece o endereço da API, algo como `https://reembolsos-api.SEU-SUBDOMINIO.workers.dev`.
+
+A partir daí, todo push na `main` que mexer em `api/` publica a API de novo.
+
+### 2. Front na Vercel
 
 1. Na Vercel, **Add New > Project** e importe este repositório
 2. **Root Directory:** `web`
 3. **Framework:** Vite (detectado sozinho)
-4. Em **Environment Variables**, crie `VITE_API_URL` com o endereço da API do passo 2
+4. Em **Environment Variables**, crie `VITE_API_URL` com o endereço da API do passo 1
 5. Deploy
 
-### 4. Liberar o domínio do front na API
+### 3. Liberar o front na API
 
-Em `api/wrangler.toml`, coloque o endereço do front em `ALLOWED_ORIGINS` (separe vários por vírgula):
+Coloque o endereço que a Vercel gerou na variável `FRONT_URLS` do GitHub (passo 1) e rode o workflow de novo. Sem isso, o navegador bloqueia as chamadas do front para a API.
 
-```toml
-ALLOWED_ORIGINS = "https://reembolsos.vercel.app,http://localhost:5173"
-```
-
-Faça commit na `main` (o GitHub Actions publica) ou rode `npx wrangler deploy`.
-
-### 5. Deploy automático da API pelo GitHub
-
-Em **GitHub > Settings > Secrets and variables > Actions**, crie:
-
-| Segredo | Onde pegar |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare > My Profile > API Tokens > Create Token > modelo **Edit Cloudflare Workers**, e adicione a permissão **D1: Edit** |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare > Workers e Pages, na lateral direita |
-
-A partir daí, todo push na `main` que mexer em `api/` aplica as migrações e publica a API.
-
-### 6. Primeiro acesso
+### 4. Primeiro acesso
 
 Abra o front. Como não há usuários, a tela pede para criar o **administrador**. Depois, cadastre os outros usuários em **Usuários**.
 

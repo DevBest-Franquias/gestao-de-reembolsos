@@ -3,13 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2025-10-01"
 
 [vars]
-# Domínios do front autorizados a chamar a API (separados por vírgula)
+# Domínios do front autorizados (no deploy, vem da variável FRONT_URLS do GitHub)
 ALLOWED_ORIGINS = "http://localhost:5173"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "reembolsos"
-database_id = "COLE_AQUI_O_ID_DO_D1"
+database_id = "preenchido-pelo-deploy"  # o GitHub Actions troca pelo ID real
 migrations_dir = "migrations"
 
 [[r2_buckets]]
