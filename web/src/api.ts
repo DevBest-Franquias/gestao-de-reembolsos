@@ -74,6 +74,7 @@ export type Reembolso = {
   solicitante_id: number | null;
   solicitante_nome: string;
   solicitante_email: string;
+  solicitante_cpf: string;
   fornecedor_novo: number;
   fornecedor_id: number | null;
   fornecedor_nome: string;

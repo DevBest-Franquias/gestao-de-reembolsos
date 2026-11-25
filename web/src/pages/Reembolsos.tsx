@@ -63,7 +63,7 @@ export default function Reembolsos() {
     return lista.filter((r) => {
       if (filtro !== 'todos' && r.status !== filtro) return false;
       if (!t) return true;
-      const alvo = `${r.solicitante_nome} ${r.solicitante_email} ${r.fornecedor_nome} ${r.numero_documento} ${r.descricao}`.toLowerCase();
+      const alvo = `${r.solicitante_nome} ${r.solicitante_email} ${r.solicitante_cpf} ${mascaraDocumento(r.solicitante_cpf || '')} ${r.fornecedor_nome} ${r.numero_documento} ${r.descricao}`.toLowerCase();
       return alvo.includes(t) || (tDig.length >= 3 && r.fornecedor_documento.includes(tDig));
     });
   }, [lista, filtro, busca]);
@@ -110,6 +110,7 @@ export default function Reembolsos() {
             <tr>
               <th>Nome do solicitante</th>
               <th>E-mail do solicitante</th>
+              <th>CPF do solicitante</th>
               <th>Fornecedor novo</th>
               <th>Nome / Razão social</th>
               <th>CNPJ / CPF</th>
@@ -129,6 +130,7 @@ export default function Reembolsos() {
               <tr key={r.id}>
                 <td className="forte">{r.solicitante_nome}</td>
                 <td>{r.solicitante_email}</td>
+                <td className="mono">{r.solicitante_cpf ? mascaraDocumento(r.solicitante_cpf) : <span className="mudo">Não informado</span>}</td>
                 <td>{r.fornecedor_novo ? 'Sim' : 'Não'}</td>
                 <td>{r.fornecedor_nome}</td>
                 <td className="mono">{mascaraDocumento(r.fornecedor_documento)}</td>
@@ -163,9 +165,9 @@ export default function Reembolsos() {
               </tr>
             ))}
             {!carregando && !filtrados.length && (
-              <tr><td colSpan={14} className="vazio">{lista.length ? 'Nenhuma solicitação com esses filtros.' : 'Nenhuma solicitação registrada ainda.'}</td></tr>
+              <tr><td colSpan={15} className="vazio">{lista.length ? 'Nenhuma solicitação com esses filtros.' : 'Nenhuma solicitação registrada ainda.'}</td></tr>
             )}
-            {carregando && <tr><td colSpan={14} className="vazio">Carregando…</td></tr>}
+            {carregando && <tr><td colSpan={15} className="vazio">Carregando…</td></tr>}
           </tbody>
         </table>
       </div>

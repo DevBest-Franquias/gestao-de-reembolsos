@@ -467,18 +467,31 @@ async function lerReembolso(c: Ctx) {
   let solicitante_id: number | null = b.solicitante_id ? Number(b.solicitante_id) : null;
   let solicitante_nome = texto(b.solicitante_nome);
   let solicitante_email = texto(b.solicitante_email).toLowerCase();
+  let solicitante_cpf = soDigitos(b.solicitante_cpf);
+  let completarCpfCadastro = false;
   if (solicitante_id) {
-    const s = await db.prepare('SELECT * FROM solicitantes WHERE id = ?').bind(solicitante_id).first<{ nome: string; email: string }>();
+    const s = await db.prepare('SELECT * FROM solicitantes WHERE id = ?').bind(solicitante_id).first<{ nome: string; email: string; cpf: string }>();
     if (!s) return { falha: 'Solicitante não encontrado.' };
     solicitante_nome = s.nome;
     solicitante_email = s.email;
+    // Usa o CPF do cadastro; se o cadastro ainda não tiver, aceita o informado e completa o cadastro
+    if (s.cpf) solicitante_cpf = s.cpf;
+    else completarCpfCadastro = true;
   }
   if (!solicitante_nome) return { falha: 'Informe o solicitante.' };
+  if (!cpfValido(solicitante_cpf)) return { falha: 'CPF do solicitante inválido.' };
   if (!emailValido(solicitante_email)) return { falha: 'Informe um e-mail válido para o solicitante.' };
+  if (completarCpfCadastro || (!solicitante_id && b.salvar_solicitante)) {
+    const outro = await cpfEmUso(db, solicitante_cpf, solicitante_id ?? 0);
+    if (outro) return { falha: `Esse CPF já está cadastrado para ${outro.nome}.` };
+  }
+  if (completarCpfCadastro) {
+    await db.prepare('UPDATE solicitantes SET cpf = ? WHERE id = ?').bind(solicitante_cpf, solicitante_id).run();
+  }
   if (!solicitante_id && b.salvar_solicitante) {
     const novo = await db
-      .prepare('INSERT INTO solicitantes (nome, email) VALUES (?, ?) RETURNING id')
-      .bind(solicitante_nome, solicitante_email)
+      .prepare('INSERT INTO solicitantes (nome, email, cpf) VALUES (?, ?, ?) RETURNING id')
+      .bind(solicitante_nome, solicitante_email, solicitante_cpf)
       .first<{ id: number }>();
     solicitante_id = novo!.id;
   }
@@ -519,6 +532,7 @@ async function lerReembolso(c: Ctx) {
     solicitante_id,
     solicitante_nome,
     solicitante_email,
+    solicitante_cpf,
     fornecedor_novo,
     fornecedor_id,
     fornecedor_nome,
@@ -535,6 +549,7 @@ const CAMPOS = [
   'solicitante_id',
   'solicitante_nome',
   'solicitante_email',
+  'solicitante_cpf',
   'fornecedor_novo',
   'fornecedor_id',
   'fornecedor_nome',

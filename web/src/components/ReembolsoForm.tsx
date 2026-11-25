@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api, abrirAnexo, enviarAnexos, FORMAS, type Anexo, type Forma, type Fornecedor, type Reembolso, type Solicitante } from '../api';
-import { documentoValido, mascaraDocumento, tamanhoArquivo } from '../formato';
+import { documentoValido, mascaraDocumento, soDigitos, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
 const DICA_ANEXO = 'Nota fiscal / boleto / chave pix / outros (podem ser enviados vários arquivos separados)';
@@ -19,6 +19,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
   );
   const [solNome, setSolNome] = useState(inicial?.solicitante_nome ?? '');
   const [solEmail, setSolEmail] = useState(inicial?.solicitante_email ?? '');
+  const [solCpf, setSolCpf] = useState(inicial?.solicitante_cpf ? mascaraDocumento(inicial.solicitante_cpf) : '');
   const [salvarSolicitante, setSalvarSolicitante] = useState(true);
 
   const [fornNovo, setFornNovo] = useState<'' | 'sim' | 'nao'>(inicial ? (inicial.fornecedor_novo ? 'sim' : 'nao') : '');
@@ -41,6 +42,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
     const s = solicitantes.find((x) => String(x.id) === id);
     setSolNome(s?.nome ?? '');
     setSolEmail(s?.email ?? '');
+    setSolCpf(s?.cpf ? mascaraDocumento(s.cpf) : '');
   };
 
   const escolherFornecedor = (id: string) => {
@@ -72,6 +74,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
   const salvar = async (e: FormEvent) => {
     e.preventDefault();
     if (!solicitanteId) return avisar('Escolha o solicitante.', 'erro');
+    if (soDigitos(solCpf).length !== 11 || !documentoValido(solCpf)) return avisar('CPF do solicitante inválido.', 'erro');
     if (!fornNovo) return avisar('Informe se o fornecedor é novo.', 'erro');
     if (fornNovo === 'nao' && !fornecedorId) return avisar('Escolha o fornecedor.', 'erro');
     if (fornNovo === 'sim' && !documentoValido(fornDoc)) return avisar('CPF ou CNPJ do fornecedor inválido.', 'erro');
@@ -84,6 +87,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
         solicitante_id: solicitanteId !== 'outro' ? Number(solicitanteId) : null,
         solicitante_nome: solNome,
         solicitante_email: solEmail,
+        solicitante_cpf: solCpf,
         salvar_solicitante: solicitanteId === 'outro' && salvarSolicitante,
         fornecedor_novo: fornNovo === 'sim',
         fornecedor_id: fornNovo === 'nao' ? Number(fornecedorId) : null,
@@ -110,6 +114,7 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
   };
 
   const solicitanteDoCadastro = solicitanteId !== '' && solicitanteId !== 'outro';
+  const cadastroSemCpf = solicitanteDoCadastro && !solicitantes.find((x) => String(x.id) === solicitanteId)?.cpf;
 
   return (
     <form className="form" onSubmit={salvar}>
@@ -130,6 +135,19 @@ export default function ReembolsoForm({ inicial, solicitantes, fornecedores, aoS
               <input value={solNome} onChange={(e) => setSolNome(e.target.value)} required />
             </label>
           )}
+          <label className="campo">
+            <span>CPF do solicitante</span>
+            <input
+              inputMode="numeric"
+              value={solCpf}
+              placeholder={solicitanteDoCadastro && !cadastroSemCpf ? '' : '000.000.000-00'}
+              onChange={(e) => setSolCpf(mascaraDocumento(soDigitos(e.target.value).slice(0, 11)))}
+              readOnly={solicitanteDoCadastro && !cadastroSemCpf}
+              required
+            />
+            {soDigitos(solCpf).length === 11 && !documentoValido(solCpf) && <span className="erro">CPF inválido.</span>}
+            {cadastroSemCpf && <span className="mudo pequeno">Esse solicitante ainda não tem CPF no cadastro. O CPF informado aqui será salvo nele.</span>}
+          </label>
           <label className="campo">
             <span>E-mail do solicitante</span>
             <input type="email" value={solEmail} onChange={(e) => setSolEmail(e.target.value)} readOnly={solicitanteDoCadastro} required />
