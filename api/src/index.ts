@@ -240,40 +240,154 @@ app.delete('/api/usuarios/:id', somenteAdmin, async (c) => {
 });
 
 /* ---------- Solicitantes ---------- */
+type Cartao = {
+  id: number;
+  solicitante_id: number;
+  final: string;
+  comprovante_chave_r2: string | null;
+  comprovante_nome: string | null;
+  comprovante_tamanho: number | null;
+};
+
+// Não expõe a chave interna do R2 para o front
+const cartaoPublico = (k: Cartao) => ({
+  id: k.id,
+  solicitante_id: k.solicitante_id,
+  final: k.final,
+  comprovante: k.comprovante_chave_r2 ? { nome: k.comprovante_nome, tamanho: k.comprovante_tamanho } : null,
+});
+
 app.get('/api/solicitantes', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM solicitantes ORDER BY nome').all();
-  return c.json(results);
+  const { results } = await c.env.DB.prepare('SELECT * FROM solicitantes ORDER BY nome').all<Record<string, unknown>>();
+  const { results: cartoes } = await c.env.DB.prepare('SELECT * FROM cartoes ORDER BY id').all<Cartao>();
+  return c.json(
+    results.map((s) => ({
+      ...s,
+      cartoes: cartoes.filter((k) => k.solicitante_id === s.id).map(cartaoPublico),
+    })),
+  );
 });
 
 async function lerSolicitante(c: Ctx) {
   const b = await c.req.json().catch(() => ({}));
   const nome = texto(b.nome);
   const email = texto(b.email).toLowerCase();
+  const chave_pix = texto(b.chave_pix);
   if (!nome) return { falha: 'Informe o nome do solicitante.' };
   if (!emailValido(email)) return { falha: 'Informe um e-mail válido.' };
-  return { nome, email };
+  return { nome, email, chave_pix };
 }
 
 app.post('/api/solicitantes', async (c) => {
   const d = await lerSolicitante(c);
   if ('falha' in d) return erro(c, d.falha!);
-  const r = await c.env.DB.prepare('INSERT INTO solicitantes (nome, email) VALUES (?, ?) RETURNING *').bind(d.nome, d.email).first();
-  return c.json(r, 201);
+  const r = await c.env.DB.prepare('INSERT INTO solicitantes (nome, email, chave_pix) VALUES (?, ?, ?) RETURNING *')
+    .bind(d.nome, d.email, d.chave_pix)
+    .first();
+  return c.json({ ...r, cartoes: [] }, 201);
 });
 
 app.put('/api/solicitantes/:id', async (c) => {
   const d = await lerSolicitante(c);
   if ('falha' in d) return erro(c, d.falha!);
-  const r = await c.env.DB.prepare('UPDATE solicitantes SET nome = ?, email = ? WHERE id = ? RETURNING *')
-    .bind(d.nome, d.email, Number(c.req.param('id')))
+  const r = await c.env.DB.prepare('UPDATE solicitantes SET nome = ?, email = ?, chave_pix = ? WHERE id = ? RETURNING *')
+    .bind(d.nome, d.email, d.chave_pix, Number(c.req.param('id')))
     .first();
   if (!r) return erro(c, 'Solicitante não encontrado.', 404);
   return c.json(r);
 });
 
 app.delete('/api/solicitantes/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM solicitantes WHERE id = ?').bind(Number(c.req.param('id'))).run();
+  const id = Number(c.req.param('id'));
+  const { results } = await c.env.DB.prepare('SELECT comprovante_chave_r2 FROM cartoes WHERE solicitante_id = ? AND comprovante_chave_r2 IS NOT NULL')
+    .bind(id)
+    .all<{ comprovante_chave_r2: string }>();
+  if (results.length) await c.env.ANEXOS.delete(results.map((k) => k.comprovante_chave_r2));
+  await c.env.DB.prepare('DELETE FROM cartoes WHERE solicitante_id = ?').bind(id).run();
+  await c.env.DB.prepare('DELETE FROM solicitantes WHERE id = ?').bind(id).run();
   return c.json({ ok: true });
+});
+
+/* ---------- Cartões dos solicitantes ---------- */
+const lerFinal = (v: unknown) => {
+  const d = soDigitos(v);
+  return d.length === 4 ? d : null;
+};
+
+const buscarCartao = (db: D1Database, id: number) => db.prepare('SELECT * FROM cartoes WHERE id = ?').bind(id).first<Cartao>();
+
+app.post('/api/solicitantes/:id/cartoes', async (c) => {
+  const sid = Number(c.req.param('id'));
+  const existe = await c.env.DB.prepare('SELECT id FROM solicitantes WHERE id = ?').bind(sid).first();
+  if (!existe) return erro(c, 'Solicitante não encontrado.', 404);
+  const b = await c.req.json().catch(() => ({}));
+  const final = lerFinal(b.final);
+  if (!final) return erro(c, 'Informe os 4 últimos dígitos do cartão.');
+  const k = await c.env.DB.prepare('INSERT INTO cartoes (solicitante_id, final) VALUES (?, ?) RETURNING *').bind(sid, final).first<Cartao>();
+  return c.json(cartaoPublico(k!), 201);
+});
+
+app.put('/api/cartoes/:id', async (c) => {
+  const b = await c.req.json().catch(() => ({}));
+  const final = lerFinal(b.final);
+  if (!final) return erro(c, 'Informe os 4 últimos dígitos do cartão.');
+  const k = await c.env.DB.prepare('UPDATE cartoes SET final = ? WHERE id = ? RETURNING *').bind(final, Number(c.req.param('id'))).first<Cartao>();
+  if (!k) return erro(c, 'Cartão não encontrado.', 404);
+  return c.json(cartaoPublico(k));
+});
+
+app.delete('/api/cartoes/:id', async (c) => {
+  const k = await buscarCartao(c.env.DB, Number(c.req.param('id')));
+  if (!k) return erro(c, 'Cartão não encontrado.', 404);
+  if (k.comprovante_chave_r2) await c.env.ANEXOS.delete(k.comprovante_chave_r2);
+  await c.env.DB.prepare('DELETE FROM cartoes WHERE id = ?').bind(k.id).run();
+  return c.json({ ok: true });
+});
+
+// Envia (ou troca) o comprovante em PDF do cartão
+app.post('/api/cartoes/:id/comprovante', async (c) => {
+  const k = await buscarCartao(c.env.DB, Number(c.req.param('id')));
+  if (!k) return erro(c, 'Cartão não encontrado.', 404);
+  const form = await c.req.formData();
+  const f = form.get('arquivo');
+  if (!f || typeof f === 'string') return erro(c, 'Nenhum arquivo enviado.');
+  const ehPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+  if (!ehPdf) return erro(c, 'O comprovante precisa ser um arquivo PDF.');
+  if (f.size > MAX_ANEXO_BYTES) return erro(c, 'O comprovante passa de 20 MB.');
+  const chave = `cartoes/${k.id}/${crypto.randomUUID()}.pdf`;
+  await c.env.ANEXOS.put(chave, f.stream(), { httpMetadata: { contentType: 'application/pdf' } });
+  if (k.comprovante_chave_r2) await c.env.ANEXOS.delete(k.comprovante_chave_r2);
+  const novo = await c.env.DB.prepare(
+    'UPDATE cartoes SET comprovante_chave_r2 = ?, comprovante_nome = ?, comprovante_tamanho = ? WHERE id = ? RETURNING *',
+  )
+    .bind(chave, f.name, f.size, k.id)
+    .first<Cartao>();
+  return c.json(cartaoPublico(novo!));
+});
+
+app.get('/api/cartoes/:id/comprovante', async (c) => {
+  const k = await buscarCartao(c.env.DB, Number(c.req.param('id')));
+  if (!k?.comprovante_chave_r2) return erro(c, 'Comprovante não encontrado.', 404);
+  const obj = await c.env.ANEXOS.get(k.comprovante_chave_r2);
+  if (!obj) return erro(c, 'Arquivo não encontrado no armazenamento.', 404);
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(k.comprovante_nome || 'comprovante.pdf')}`,
+    },
+  });
+});
+
+app.delete('/api/cartoes/:id/comprovante', async (c) => {
+  const k = await buscarCartao(c.env.DB, Number(c.req.param('id')));
+  if (!k) return erro(c, 'Cartão não encontrado.', 404);
+  if (k.comprovante_chave_r2) await c.env.ANEXOS.delete(k.comprovante_chave_r2);
+  const novo = await c.env.DB.prepare(
+    'UPDATE cartoes SET comprovante_chave_r2 = NULL, comprovante_nome = NULL, comprovante_tamanho = NULL WHERE id = ? RETURNING *',
+  )
+    .bind(k.id)
+    .first<Cartao>();
+  return c.json(cartaoPublico(novo!));
 });
 
 /* ---------- Fornecedores ---------- */

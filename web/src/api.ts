@@ -32,10 +32,13 @@ export async function api<T = unknown>(caminho: string, opcoes: RequestInit & { 
   return dados as T;
 }
 
-export async function abrirAnexo(id: number) {
+export const abrirAnexo = (id: number) => abrirArquivo(`/anexos/${id}`);
+export const abrirComprovante = (cartaoId: number) => abrirArquivo(`/cartoes/${cartaoId}/comprovante`);
+
+async function abrirArquivo(caminho: string) {
   const janela = window.open('', '_blank');
-  const r = await fetch(`${BASE}/api/anexos/${id}`, { headers: { Authorization: `Bearer ${sessao.token}` } });
-  if (!r.ok) { janela?.close(); throw new ErroApi('Não foi possível abrir o anexo.', r.status); }
+  const r = await fetch(`${BASE}/api${caminho}`, { headers: { Authorization: `Bearer ${sessao.token}` } });
+  if (!r.ok) { janela?.close(); throw new ErroApi('Não foi possível abrir o arquivo.', r.status); }
   const url = URL.createObjectURL(await r.blob());
   if (janela) janela.location.href = url; else window.location.href = url;
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -47,9 +50,21 @@ export async function enviarAnexos(reembolsoId: number, arquivos: File[]) {
   return api<Anexo[]>(`/reembolsos/${reembolsoId}/anexos`, { method: 'POST', body: fd });
 }
 
+export async function enviarComprovante(cartaoId: number, arquivo: File) {
+  const fd = new FormData();
+  fd.append('arquivo', arquivo);
+  return api<Cartao>(`/cartoes/${cartaoId}/comprovante`, { method: 'POST', body: fd });
+}
+
 /* ---------- Tipos ---------- */
 export type Usuario = { id: number; nome: string; email: string; papel: 'admin' | 'usuario' };
-export type Solicitante = { id: number; nome: string; email: string };
+export type Cartao = {
+  id: number;
+  solicitante_id: number;
+  final: string;
+  comprovante: { nome: string; tamanho: number } | null;
+};
+export type Solicitante = { id: number; nome: string; email: string; chave_pix: string; cartoes: Cartao[] };
 export type Fornecedor = { id: number; nome: string; documento: string };
 export type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number };
 export type Status = 'nao_solicitado' | 'solicitado' | 'pago';

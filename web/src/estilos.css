@@ -275,3 +275,36 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 }
 .olho:hover { background: var(--roxo-50); color: var(--roxo-escuro); }
 .campo > span.mudo { font-weight: 400; color: var(--n-500); margin: 0; }
+
+/* ---------- Cartões dos solicitantes ---------- */
+.cartoes-celula { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip-cartao {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--n-200); background: var(--n-50);
+  border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; color: var(--n-700);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.chip-cartao.com-pdf { cursor: pointer; border-color: var(--roxo-200); background: var(--roxo-50); color: var(--roxo-escuro); }
+.chip-cartao.com-pdf:hover { border-color: var(--roxo-claro); }
+.chip-cartao .pdf { font-size: 10px; background: var(--roxo-escuro); color: #fff; border-radius: 4px; padding: 0 4px; }
+.cartoes-lista { display: flex; flex-direction: column; gap: 10px; }
+.cartao-linha {
+  display: grid; grid-template-columns: 80px 170px 1fr 32px; gap: 14px; align-items: end;
+  background: var(--n-50); border-radius: 14px; padding: 12px 12px 12px 16px;
+}
+.cartao-numero { font-weight: 700; color: var(--roxo-escuro); padding-bottom: 10px; }
+.final-entrada { display: flex; align-items: center; gap: 4px; }
+.final-entrada input { font-variant-numeric: tabular-nums; letter-spacing: 0.12em; }
+.cartao-excluir { margin-bottom: 6px; }
+.comprovante-arquivo {
+  display: flex; align-items: center; gap: 8px; min-height: 42px; background: #fff;
+  border: 1px solid var(--n-200); border-radius: 14px; padding: 4px 6px 4px 12px; min-width: 0;
+}
+.comprovante-arquivo .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.soltar-compacto { width: 100%; padding: 10px; min-height: 42px; font: inherit; }
+@media (max-width: 860px) {
+  .cartao-linha { grid-template-columns: 1fr 32px; }
+  .cartao-numero { grid-column: 1; padding: 0; }
+  .cartao-excluir { grid-column: 2; grid-row: 1; }
+  .cartao-final, .cartao-comprovante { grid-column: 1 / -1; }
+  .comprovante-arquivo { flex-wrap: wrap; }
+}
