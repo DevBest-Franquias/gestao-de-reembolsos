@@ -64,7 +64,7 @@ export type Cartao = {
   final: string;
   comprovante: { nome: string; tamanho: number } | null;
 };
-export type Solicitante = { id: number; nome: string; email: string; chave_pix: string; cartoes: Cartao[] };
+export type Solicitante = { id: number; nome: string; email: string; cpf: string; chave_pix: string; cartoes: Cartao[] };
 export type Fornecedor = { id: number; nome: string; documento: string };
 export type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number };
 export type Status = 'nao_solicitado' | 'solicitado' | 'pago';

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, abrirComprovante, enviarComprovante, type Cartao, type Solicitante } from '../api';
 import { Modal, avisar, msgErro } from '../components/ui';
-import { tamanhoArquivo } from '../formato';
+import { documentoValido, mascaraDocumento, soDigitos, tamanhoArquivo } from '../formato';
 
 /** Cartão sendo editado no formulário. As mudanças só vão para a API ao salvar. */
 type CartaoForm = {
@@ -14,7 +14,7 @@ type CartaoForm = {
   removerComprovante?: boolean;
 };
 
-type Edicao = { id?: number; nome: string; email: string; chave_pix: string; cartoes: CartaoForm[]; removidos: number[] };
+type Edicao = { id?: number; nome: string; cpf: string; email: string; chave_pix: string; cartoes: CartaoForm[]; removidos: number[] };
 
 /** Etiqueta curta com o tipo do arquivo, por exemplo PDF, JPG, PNG */
 const extensao = (nome: string) => {
@@ -42,9 +42,9 @@ export default function Solicitantes() {
   const carregar = () => api<Solicitante[]>('/solicitantes').then(setLista).catch((e) => avisar(msgErro(e), 'erro'));
   useEffect(() => { carregar(); }, []);
 
-  const abrirNovo = () => setEdicao({ nome: '', email: '', chave_pix: '', cartoes: [], removidos: [] });
+  const abrirNovo = () => setEdicao({ nome: '', cpf: '', email: '', chave_pix: '', cartoes: [], removidos: [] });
   const abrirEdicao = (s: Solicitante) =>
-    setEdicao({ id: s.id, nome: s.nome, email: s.email, chave_pix: s.chave_pix ?? '', cartoes: (s.cartoes ?? []).map(paraForm), removidos: [] });
+    setEdicao({ id: s.id, nome: s.nome, cpf: mascaraDocumento(s.cpf ?? ''), email: s.email, chave_pix: s.chave_pix ?? '', cartoes: (s.cartoes ?? []).map(paraForm), removidos: [] });
 
   const mudarCartao = (chave: string, mudanca: Partial<CartaoForm>) =>
     setEdicao((e) => e && { ...e, cartoes: e.cartoes.map((k) => (k.chave === chave ? { ...k, ...mudanca } : k)) });
@@ -60,12 +60,13 @@ export default function Solicitantes() {
     ev.preventDefault();
     if (!edicao) return;
     if (edicao.nome.trim().split(/\s+/).length < 2) return avisar('Informe o nome completo (nome e sobrenome).', 'erro');
+    if (soDigitos(edicao.cpf).length !== 11 || !documentoValido(edicao.cpf)) return avisar('CPF inválido.', 'erro');
     const invalido = edicao.cartoes.find((k) => !/^\d{4}$/.test(k.final));
     if (invalido) return avisar('Informe os 4 últimos dígitos de cada cartão.', 'erro');
 
     setSalvando(true);
     try {
-      const dados = { nome: edicao.nome, email: edicao.email, chave_pix: edicao.chave_pix };
+      const dados = { nome: edicao.nome, cpf: edicao.cpf, email: edicao.email, chave_pix: edicao.chave_pix };
       const s = await api<Solicitante>(edicao.id ? `/solicitantes/${edicao.id}` : '/solicitantes', {
         method: edicao.id ? 'PUT' : 'POST',
         json: dados,
@@ -104,7 +105,7 @@ export default function Solicitantes() {
 
   const t = busca.toLowerCase();
   const filtrados = lista.filter((s) =>
-    `${s.nome} ${s.email} ${s.chave_pix ?? ''} ${(s.cartoes ?? []).map((k) => k.final).join(' ')}`.toLowerCase().includes(t),
+    `${s.nome} ${s.cpf ?? ''} ${mascaraDocumento(s.cpf ?? '')} ${s.email} ${s.chave_pix ?? ''} ${(s.cartoes ?? []).map((k) => k.final).join(' ')}`.toLowerCase().includes(t),
   );
 
   return (
@@ -117,15 +118,16 @@ export default function Solicitantes() {
         <button className="btn btn-primario" onClick={abrirNovo}>Novo solicitante</button>
       </div>
       <div className="filtros">
-        <input className="busca" placeholder="Buscar por nome, e-mail, Pix ou final do cartão" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input className="busca" placeholder="Buscar por nome, CPF, e-mail, Pix ou final do cartão" value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
       <div className="tabela-caixa">
         <table className="tabela">
-          <thead><tr><th>Nome completo</th><th>E-mail corporativo</th><th>Chave Pix para reembolso</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
+          <thead><tr><th>Nome completo</th><th>CPF</th><th>E-mail corporativo</th><th>Chave Pix para reembolso</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
           <tbody>
             {filtrados.map((s) => (
               <tr key={s.id}>
                 <td className="forte">{s.nome}</td>
+                <td className="mono">{s.cpf ? mascaraDocumento(s.cpf) : <span className="mudo">Não informado</span>}</td>
                 <td>{s.email}</td>
                 <td>{s.chave_pix || <span className="mudo">Não informada</span>}</td>
                 <td>
@@ -149,7 +151,7 @@ export default function Solicitantes() {
                 </td>
               </tr>
             ))}
-            {!filtrados.length && <tr><td colSpan={5} className="vazio">Nenhum solicitante cadastrado.</td></tr>}
+            {!filtrados.length && <tr><td colSpan={6} className="vazio">Nenhum solicitante cadastrado.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -159,9 +161,19 @@ export default function Solicitantes() {
           <form onSubmit={salvar} className="form">
             <fieldset className="grupo">
               <legend>Dados do solicitante</legend>
-              <div className="grade grade-3">
+              <div className="grade grade-2">
                 <label className="campo"><span>Nome completo</span>
                   <input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} placeholder="Nome e sobrenome" required autoFocus />
+                </label>
+                <label className="campo"><span>CPF</span>
+                  <input
+                    inputMode="numeric"
+                    value={edicao.cpf}
+                    placeholder="000.000.000-00"
+                    onChange={(e) => setEdicao({ ...edicao, cpf: mascaraDocumento(soDigitos(e.target.value).slice(0, 11)) })}
+                    required
+                  />
+                  {soDigitos(edicao.cpf).length === 11 && !documentoValido(edicao.cpf) && <span className="erro">CPF inválido.</span>}
                 </label>
                 <label className="campo"><span>E-mail corporativo</span>
                   <input type="email" value={edicao.email} onChange={(e) => setEdicao({ ...edicao, email: e.target.value })} placeholder="nome@empresa.com.br" required />

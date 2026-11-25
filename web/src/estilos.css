@@ -309,3 +309,7 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
   .comprovante-arquivo { flex-wrap: wrap; }
 }
 .modal:focus, .modal:focus-visible { outline: none; }
+
+.grade-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.campo > span.erro { font-weight: 400; margin: 0; }
+@media (max-width: 860px) { .grade-2 { grid-template-columns: 1fr; } }

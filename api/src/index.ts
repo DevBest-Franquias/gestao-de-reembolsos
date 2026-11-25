@@ -273,16 +273,23 @@ async function lerSolicitante(c: Ctx) {
   const nome = texto(b.nome);
   const email = texto(b.email).toLowerCase();
   const chave_pix = texto(b.chave_pix);
+  const cpf = soDigitos(b.cpf);
   if (!nome) return { falha: 'Informe o nome do solicitante.' };
+  if (!cpfValido(cpf)) return { falha: 'CPF do solicitante inválido.' };
   if (!emailValido(email)) return { falha: 'Informe um e-mail válido.' };
-  return { nome, email, chave_pix };
+  return { nome, email, chave_pix, cpf };
 }
+
+const cpfEmUso = (db: D1Database, cpf: string, ignorarId = 0) =>
+  db.prepare('SELECT nome FROM solicitantes WHERE cpf = ? AND id <> ?').bind(cpf, ignorarId).first<{ nome: string }>();
 
 app.post('/api/solicitantes', async (c) => {
   const d = await lerSolicitante(c);
   if ('falha' in d) return erro(c, d.falha!);
-  const r = await c.env.DB.prepare('INSERT INTO solicitantes (nome, email, chave_pix) VALUES (?, ?, ?) RETURNING *')
-    .bind(d.nome, d.email, d.chave_pix)
+  const outro = await cpfEmUso(c.env.DB, d.cpf);
+  if (outro) return erro(c, `Esse CPF já está cadastrado para ${outro.nome}.`, 409);
+  const r = await c.env.DB.prepare('INSERT INTO solicitantes (nome, email, chave_pix, cpf) VALUES (?, ?, ?, ?) RETURNING *')
+    .bind(d.nome, d.email, d.chave_pix, d.cpf)
     .first();
   return c.json({ ...r, cartoes: [] }, 201);
 });
@@ -290,8 +297,11 @@ app.post('/api/solicitantes', async (c) => {
 app.put('/api/solicitantes/:id', async (c) => {
   const d = await lerSolicitante(c);
   if ('falha' in d) return erro(c, d.falha!);
-  const r = await c.env.DB.prepare('UPDATE solicitantes SET nome = ?, email = ?, chave_pix = ? WHERE id = ? RETURNING *')
-    .bind(d.nome, d.email, d.chave_pix, Number(c.req.param('id')))
+  const id = Number(c.req.param('id'));
+  const outro = await cpfEmUso(c.env.DB, d.cpf, id);
+  if (outro) return erro(c, `Esse CPF já está cadastrado para ${outro.nome}.`, 409);
+  const r = await c.env.DB.prepare('UPDATE solicitantes SET nome = ?, email = ?, chave_pix = ?, cpf = ? WHERE id = ? RETURNING *')
+    .bind(d.nome, d.email, d.chave_pix, d.cpf, id)
     .first();
   if (!r) return erro(c, 'Solicitante não encontrado.', 404);
   return c.json(r);
