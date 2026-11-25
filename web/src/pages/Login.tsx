@@ -11,7 +11,14 @@ export default function Login({ aoEntrar }: { aoEntrar: (u: Usuario) => void }) 
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    api<{ precisaSetup: boolean }>('/setup').then((r) => setSetup(r.precisaSetup)).catch(() => {});
+    api<{ precisaSetup: boolean }>('/setup')
+      .then((r) => setSetup(r.precisaSetup))
+      .catch(() =>
+        setErro(
+          `Não foi possível conectar à API (${import.meta.env.VITE_API_URL || 'VITE_API_URL não configurada'}). ` +
+            'Confira a variável VITE_API_URL na Vercel e se este endereço está em FRONT_URLS no GitHub.',
+        ),
+      );
   }, []);
 
   const enviar = async (e: FormEvent) => {
