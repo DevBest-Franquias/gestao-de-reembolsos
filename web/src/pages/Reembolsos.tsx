@@ -14,6 +14,7 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
   const [form, setForm] = useState<{ item: Reembolso | null } | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [busca, setBusca] = useState('');
+  const [filtroSolicitante, setFiltroSolicitante] = useState('');
 
   const carregar = async () => {
     try {
@@ -44,22 +45,31 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
     } catch (e) { avisar(msgErro(e), 'erro'); }
   };
 
+  // Nomes de quem já pediu reembolso, em ordem alfabética
+  const nomesSolicitantes = useMemo(
+    () => [...new Set(lista.map((r) => r.solicitante_nome))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [lista],
+  );
+
+  // Contagem por status respeitando o solicitante escolhido
   const contagem = useMemo(() => {
-    const c: Record<Filtro, number> = { todos: lista.length, nao_solicitado: 0, solicitado: 0, pago: 0 };
-    lista.forEach((r) => { c[r.status]++; });
+    const base = filtroSolicitante ? lista.filter((r) => r.solicitante_nome === filtroSolicitante) : lista;
+    const c: Record<Filtro, number> = { todos: base.length, nao_solicitado: 0, solicitado: 0, pago: 0 };
+    base.forEach((r) => { c[r.status]++; });
     return c;
-  }, [lista]);
+  }, [lista, filtroSolicitante]);
 
   const filtrados = useMemo(() => {
     const t = busca.trim().toLowerCase();
     const tDig = t.replace(/\D/g, '');
     return lista.filter((r) => {
       if (filtro !== 'todos' && r.status !== filtro) return false;
+      if (filtroSolicitante && r.solicitante_nome !== filtroSolicitante) return false;
       if (!t) return true;
       const alvo = `${r.chave_pix ?? ''} ${r.solicitante_nome} ${r.solicitante_email} ${r.solicitante_cpf} ${mascaraDocumento(r.solicitante_cpf || '')} ${r.fornecedor_nome} ${r.numero_documento} ${r.descricao}`.toLowerCase();
       return alvo.includes(t) || (tDig.length >= 3 && r.fornecedor_documento.includes(tDig));
     });
-  }, [lista, filtro, busca]);
+  }, [lista, filtro, filtroSolicitante, busca]);
 
   const total = filtrados.reduce((s, r) => s + r.valor_centavos, 0);
 
@@ -74,14 +84,30 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
       </div>
 
       <div className="filtros">
-        <div className="pilulas" role="tablist">
-          {(['todos', 'nao_solicitado', 'solicitado', 'pago'] as Filtro[]).map((f) => (
-            <button key={f} role="tab" aria-selected={filtro === f} className={`pilula ${filtro === f ? 'ativa' : ''}`} onClick={() => setFiltro(f)}>
-              {f === 'todos' ? 'Todos' : STATUS[f]} <span className="contador">{contagem[f]}</span>
-            </button>
-          ))}
-        </div>
-        <input className="busca" placeholder="Buscar por solicitante ou descrição" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <label className="filtro-campo">
+          <span>Solicitante</span>
+          <select value={filtroSolicitante} onChange={(e) => setFiltroSolicitante(e.target.value)}>
+            <option value="">Todos os solicitantes</option>
+            {nomesSolicitantes.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        <label className="filtro-campo">
+          <span>Status</span>
+          <select value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)}>
+            {(['todos', 'nao_solicitado', 'solicitado', 'pago'] as Filtro[]).map((f) => (
+              <option key={f} value={f}>{f === 'todos' ? 'Todos os status' : STATUS[f]} ({contagem[f]})</option>
+            ))}
+          </select>
+        </label>
+        <label className="filtro-campo filtro-busca">
+          <span>Descrição</span>
+          <input className="busca" placeholder="Buscar na descrição" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </label>
+        {(filtroSolicitante || filtro !== 'todos' || busca) && (
+          <button type="button" className="btn btn-fantasma btn-pequeno limpar-filtros" onClick={() => { setFiltroSolicitante(''); setFiltro('todos'); setBusca(''); }}>
+            Limpar filtros
+          </button>
+        )}
         <div className="total">
           <span className="mudo">Total filtrado</span>
           <strong>{formatarMoeda(total)}</strong>
