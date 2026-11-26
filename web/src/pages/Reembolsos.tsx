@@ -186,7 +186,7 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
         </table>
       </div>
 
-      <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo>
+      <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo={!!form?.item}>
         {form && (
             <ReembolsoForm
               eu={eu}

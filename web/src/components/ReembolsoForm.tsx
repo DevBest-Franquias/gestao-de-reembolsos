@@ -126,72 +126,113 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
 
   return (
     <form className="form" onSubmit={salvar}>
-      <fieldset className="grupo">
-        <legend>Solicitante</legend>
-        <div className="grade grade-2">
-          {inicial ? (
-            <Fixo rotulo="Nome do solicitante" valor={dados.nome} />
-          ) : (
-            <label className="campo">
+      {!inicial ? (
+        // Nova solicitação: só o que pode ser preenchido. O resto é gravado pela API a partir do cadastro.
+        <fieldset className="grupo">
+          <legend>Solicitação</legend>
+          <div className="grade grade-2">
+            <label className="campo coluna-2">
               <span>Nome do solicitante</span>
-              <select value={solicitanteId} onChange={(e) => setSolicitanteId(e.target.value)} required autoFocus>
+              <select value={solicitanteId} onChange={(e) => setSolicitanteId(e.target.value)} required>
                 <option value="">Selecione</option>
                 {solicitantes.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
               </select>
             </label>
+            <label className="campo">
+              <span>Valor do pagamento</span>
+              <CampoMoeda centavos={valor} aoMudar={setValor} />
+            </label>
+            <label className="campo coluna-2">
+              <span>Descrição do pagamento</span>
+              <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} autoFocus={!!meu} />
+            </label>
+          </div>
+          {!inicial && !meu && (
+            <p className="nota" style={{ margin: '12px 0 0' }}>
+              Seu usuário ainda não está ligado a um solicitante. Cadastre-se em <a href="#solicitantes">Solicitantes</a> com o mesmo e-mail do login (<strong>{eu.email}</strong>) para seus dados virem preenchidos.
+            </p>
           )}
-          <Fixo rotulo="E-mail do solicitante" valor={dados.email} vazio="Preenchido ao escolher" />
-        </div>
-        {!inicial && !meu && (
-          <p className="nota" style={{ margin: '12px 0 0' }}>
-            Seu usuário ainda não está ligado a um solicitante. Cadastre-se em <a href="#solicitantes">Solicitantes</a> com o mesmo e-mail do login (<strong>{eu.email}</strong>) para seus dados virem preenchidos.
-          </p>
-        )}
-        {!inicial && meu && String(meu.id) !== solicitanteId && solicitanteId && (
-          <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>
-            Você está registrando em nome de outra pessoa. <button type="button" className="link" onClick={() => setSolicitanteId(String(meu.id))}>Voltar para {meu.nome}</button>
-          </p>
-        )}
-        {faltas.length > 0 && (
-          <p className="nota nota-alerta" style={{ margin: '12px 0 0' }}>
-            O cadastro de <strong>{s!.nome}</strong> está incompleto. Falta: {faltas.join(', ')}. Complete em <a href="#solicitantes">Solicitantes</a> para registrar o reembolso.
-          </p>
-        )}
-      </fieldset>
+          {!inicial && meu && String(meu.id) !== solicitanteId && solicitanteId && (
+            <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>
+              Você está registrando em nome de outra pessoa. <button type="button" className="link" onClick={() => setSolicitanteId(String(meu.id))}>Voltar para {meu.nome}</button>
+            </p>
+          )}
+          {faltas.length > 0 && (
+            <p className="nota nota-alerta" style={{ margin: '12px 0 0' }}>
+              O cadastro de <strong>{s!.nome}</strong> está incompleto. Falta: {faltas.join(', ')}. Complete em <a href="#solicitantes">Solicitantes</a> para registrar o reembolso.
+            </p>
+          )}
+        </fieldset>
+      ) : (
+        <>
+        <fieldset className="grupo">
+          <legend>Solicitante</legend>
+          <div className="grade grade-2">
+            {inicial ? (
+              <Fixo rotulo="Nome do solicitante" valor={dados.nome} />
+            ) : (
+              <label className="campo">
+                <span>Nome do solicitante</span>
+                <select value={solicitanteId} onChange={(e) => setSolicitanteId(e.target.value)} required autoFocus>
+                  <option value="">Selecione</option>
+                  {solicitantes.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+                </select>
+              </label>
+            )}
+            <Fixo rotulo="E-mail do solicitante" valor={dados.email} vazio="Preenchido ao escolher" />
+          </div>
+          {!inicial && !meu && (
+            <p className="nota" style={{ margin: '12px 0 0' }}>
+              Seu usuário ainda não está ligado a um solicitante. Cadastre-se em <a href="#solicitantes">Solicitantes</a> com o mesmo e-mail do login (<strong>{eu.email}</strong>) para seus dados virem preenchidos.
+            </p>
+          )}
+          {!inicial && meu && String(meu.id) !== solicitanteId && solicitanteId && (
+            <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>
+              Você está registrando em nome de outra pessoa. <button type="button" className="link" onClick={() => setSolicitanteId(String(meu.id))}>Voltar para {meu.nome}</button>
+            </p>
+          )}
+          {faltas.length > 0 && (
+            <p className="nota nota-alerta" style={{ margin: '12px 0 0' }}>
+              O cadastro de <strong>{s!.nome}</strong> está incompleto. Falta: {faltas.join(', ')}. Complete em <a href="#solicitantes">Solicitantes</a> para registrar o reembolso.
+            </p>
+          )}
+        </fieldset>
 
-      <fieldset className="grupo">
-        <legend>Fornecedor</legend>
-        <div className="grade grade-3">
-          <Fixo rotulo="Fornecedor novo" valor={dados.fornecedorNovo} />
-          <Fixo rotulo="Nome / Razão social" valor={dados.fornecedorNome} vazio="Nome do solicitante" />
-          <Fixo rotulo="CNPJ / CPF" valor={dados.fornecedorDoc ? mascaraDocumento(dados.fornecedorDoc) : ''} vazio="CPF do solicitante" />
-        </div>
-      </fieldset>
+        <fieldset className="grupo">
+          <legend>Fornecedor</legend>
+          <div className="grade grade-3">
+            <Fixo rotulo="Fornecedor novo" valor={dados.fornecedorNovo} />
+            <Fixo rotulo="Nome / Razão social" valor={dados.fornecedorNome} vazio="Nome do solicitante" />
+            <Fixo rotulo="CNPJ / CPF" valor={dados.fornecedorDoc ? mascaraDocumento(dados.fornecedorDoc) : ''} vazio="CPF do solicitante" />
+          </div>
+        </fieldset>
 
-      <fieldset className="grupo">
-        <legend>Pagamento</legend>
-        <div className="grade grade-3">
-          <Fixo rotulo="Número do documento" valor={dados.numeroDoc} />
-          <Fixo rotulo="Data de vencimento" valor={formatarData(dados.vencimento)} />
-          <label className="campo">
-            <span>Valor do pagamento</span>
-            <CampoMoeda centavos={valor} aoMudar={setValor} />
-          </label>
-          <label className="campo coluna-3">
-            <span>Descrição do pagamento</span>
-            <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} />
-          </label>
-          <Fixo rotulo="Forma de pagamento" valor="Pix" />
-          <Fixo rotulo="Chave PIX" valor={dados.chavePix} vazio="Do cadastro do solicitante" classe="coluna-2" />
-          <Fixo rotulo="Banco" valor={dados.banco} vazio="Do cadastro do solicitante" />
-          <Fixo rotulo="Agência" valor={dados.agencia} vazio="Do cadastro do solicitante" />
-          <Fixo rotulo="Conta" valor={dados.conta} vazio="Do cadastro do solicitante" />
-          <Fixo rotulo="Empresa pagadora" valor={dados.empresa} classe="coluna-3" />
-          <Fixo rotulo="O custo deverá ser atrelado a mais de um centro de custo?" valor={dados.multiplos} classe="coluna-2" />
-          <Fixo rotulo="Centro de custo - N5" valor={dados.centro} />
-        </div>
-        {!inicial && <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>A data de vencimento é sempre a próxima terça ou quinta-feira a partir de hoje.</p>}
-      </fieldset>
+        <fieldset className="grupo">
+          <legend>Pagamento</legend>
+          <div className="grade grade-3">
+            <Fixo rotulo="Número do documento" valor={dados.numeroDoc} />
+            <Fixo rotulo="Data de vencimento" valor={formatarData(dados.vencimento)} />
+            <label className="campo">
+              <span>Valor do pagamento</span>
+              <CampoMoeda centavos={valor} aoMudar={setValor} />
+            </label>
+            <label className="campo coluna-3">
+              <span>Descrição do pagamento</span>
+              <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} />
+            </label>
+            <Fixo rotulo="Forma de pagamento" valor="Pix" />
+            <Fixo rotulo="Chave PIX" valor={dados.chavePix} vazio="Do cadastro do solicitante" classe="coluna-2" />
+            <Fixo rotulo="Banco" valor={dados.banco} vazio="Do cadastro do solicitante" />
+            <Fixo rotulo="Agência" valor={dados.agencia} vazio="Do cadastro do solicitante" />
+            <Fixo rotulo="Conta" valor={dados.conta} vazio="Do cadastro do solicitante" />
+            <Fixo rotulo="Empresa pagadora" valor={dados.empresa} classe="coluna-3" />
+            <Fixo rotulo="O custo deverá ser atrelado a mais de um centro de custo?" valor={dados.multiplos} classe="coluna-2" />
+            <Fixo rotulo="Centro de custo - N5" valor={dados.centro} />
+          </div>
+                </fieldset>
+
+        </>
+      )}
 
       <fieldset className="grupo">
         <legend>
