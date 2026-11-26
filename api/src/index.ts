@@ -406,6 +406,7 @@ app.delete('/api/cartoes/:id/comprovante', async (c) => {
 /* ---------- Reembolsos ---------- */
 type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number; categoria: string; criado_em: string };
 const CATEGORIAS_ANEXO = ['documento', 'cobranca'] as const;
+const MEIOS_PAGAMENTO = ['pix', 'cartao'] as const;
 
 app.get('/api/reembolsos', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM reembolsos ORDER BY id DESC').all<Record<string, unknown>>();
@@ -475,13 +476,18 @@ app.post('/api/reembolsos', async (c) => {
   const v = lerValorDescricao(b);
   if ('falha' in v) return erro(c, v.falha!);
 
-  // Cartão: com um só, usa ele; com vários, precisa escolher; sem nenhum, segue sem cartão
-  const { results: cartoes } = await c.env.DB.prepare('SELECT * FROM cartoes WHERE solicitante_id = ? ORDER BY id').bind(s.id).all<Cartao>();
+  // Como foi pago: PIX não tem cartão; Cartão usa o único do cadastro ou o escolhido
+  const meio = String(b.meio_pagamento ?? '');
+  if (!MEIOS_PAGAMENTO.includes(meio as (typeof MEIOS_PAGAMENTO)[number])) return erro(c, 'Informe como foi feito o pagamento (PIX ou Cartão).');
   let cartao: Cartao | undefined;
-  if (cartoes.length === 1) cartao = cartoes[0];
-  else if (cartoes.length > 1) {
-    cartao = cartoes.find((k) => k.id === Number(b.cartao_id));
-    if (!cartao) return erro(c, 'Escolha o cartão usado no pagamento.');
+  if (meio === 'cartao') {
+    const { results: cartoes } = await c.env.DB.prepare('SELECT * FROM cartoes WHERE solicitante_id = ? ORDER BY id').bind(s.id).all<Cartao>();
+    if (!cartoes.length) return erro(c, `${s.nome} não tem cartão cadastrado. Cadastre em Solicitantes ou escolha PIX.`);
+    if (cartoes.length === 1) cartao = cartoes[0];
+    else {
+      cartao = cartoes.find((k) => k.id === Number(b.cartao_id));
+      if (!cartao) return erro(c, 'Escolha o cartão usado no pagamento.');
+    }
   }
   // O comprovante do cartão é copiado para a solicitação, para não depender do cadastro depois
   const comprovanteCopia = await copiarComprovanteCartao(c.env, cartao);
@@ -508,6 +514,7 @@ app.post('/api/reembolsos', async (c) => {
     empresa_pagadora: EMPRESA_PAGADORA,
     multiplos_centros_custo: 0,
     centro_custo: CENTRO_CUSTO_N5,
+    meio_pagamento: meio,
     cartao_id: cartao?.id ?? null,
     cartao_final: cartao?.final ?? '',
     cartao_comprovante_chave_r2: comprovanteCopia,
@@ -574,16 +581,29 @@ app.put('/api/reembolsos/:id', async (c) => {
     });
   }
 
+  // Como foi pago: PIX retira o cartão; Cartão exige um cartão no fim
+  let meio = String(atual.meio_pagamento ?? '');
+  if (b.meio_pagamento !== undefined) {
+    meio = String(b.meio_pagamento);
+    if (!MEIOS_PAGAMENTO.includes(meio as (typeof MEIOS_PAGAMENTO)[number])) return erro(c, 'Informe como foi feito o pagamento (PIX ou Cartão).');
+    mudancas.meio_pagamento = meio;
+  }
+  const cartaoPedido = meio === 'pix' ? null : b.cartao_id;
+
   // Cartão: undefined mantém; null retira; número troca (precisa ser do solicitante)
   let chaveAntiga: string | null = null;
-  const querMudarCartao = b.cartao_id !== undefined && (b.cartao_id === null ? atual.cartao_final !== '' : Number(b.cartao_id) !== atual.cartao_id);
-  if (trocouSolicitante && b.cartao_id === undefined && atual.cartao_final) {
+  const querMudarCartao = cartaoPedido !== undefined && (cartaoPedido === null ? atual.cartao_final !== '' : Number(cartaoPedido) !== atual.cartao_id);
+  if (meio === 'cartao') {
+    const ficaSemCartao = querMudarCartao ? cartaoPedido === null : !atual.cartao_final || (trocouSolicitante && cartaoPedido === undefined);
+    if (ficaSemCartao) return erro(c, 'Escolha o cartão usado no pagamento.');
+  }
+  if (trocouSolicitante && cartaoPedido === undefined && atual.cartao_final) {
     return erro(c, 'Escolha o cartão do novo solicitante.');
   }
   if (querMudarCartao) {
     let cartao: Cartao | undefined;
-    if (b.cartao_id !== null) {
-      cartao = (await db.prepare('SELECT * FROM cartoes WHERE id = ? AND solicitante_id = ?').bind(Number(b.cartao_id), solicitanteId).first<Cartao>()) ?? undefined;
+    if (cartaoPedido !== null) {
+      cartao = (await db.prepare('SELECT * FROM cartoes WHERE id = ? AND solicitante_id = ?').bind(Number(cartaoPedido), solicitanteId).first<Cartao>()) ?? undefined;
       if (!cartao) return erro(c, 'Cartão não encontrado para esse solicitante.');
     }
     const copia = await copiarComprovanteCartao(c.env, cartao);

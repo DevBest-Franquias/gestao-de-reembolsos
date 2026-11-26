@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
-import { api, abrirAnexo, CATEGORIAS_ANEXO, abrirComprovanteCartaoReembolso, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
+import { api, abrirAnexo, CATEGORIAS_ANEXO, MEIOS_PAGAMENTO, type MeioPagamento, abrirComprovanteCartaoReembolso, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
 import { documentoValido, formatarData, mascaraDocumento, proximaTercaOuQuinta, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
@@ -107,6 +107,7 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
   const [valor, setValor] = useState(inicial?.valor_centavos ?? 0);
   const [cartaoId, setCartaoId] = useState(inicial?.cartao_final ? ATUAL : '');
   const [vencimento, setVencimento] = useState(inicial?.data_pagamento ?? '');
+  const [meio, setMeio] = useState<MeioPagamento | ''>(inicial?.meio_pagamento ?? '');
   const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
   const [anexos, setAnexos] = useState<Anexo[]>(inicial?.anexos ?? []);
   const [novosDocumento, setNovosDocumento] = useState<File[]>([]);
@@ -179,7 +180,10 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
     if (!inicial && !s) return avisar('Escolha o solicitante.', 'erro');
     if (faltas.length) return avisar('Complete o cadastro do solicitante antes de registrar.', 'erro');
     if (!valor) return avisar('Informe o valor do pagamento.', 'erro');
-    if (!inicial && cartoesSol.length > 1 && !cartaoId) return avisar('Escolha o cartão usado no pagamento.', 'erro');
+    if (!meio) return avisar('Informe como foi feito o pagamento.', 'erro');
+    if (meio === 'cartao' && !inicial && cartoesSol.length === 0) return avisar('Esse solicitante não tem cartão cadastrado. Cadastre em Solicitantes ou escolha PIX.', 'erro');
+    if (meio === 'cartao' && !inicial && cartoesSol.length > 1 && !cartaoId) return avisar('Escolha o cartão usado no pagamento.', 'erro');
+    if (meio === 'cartao' && inicial && !cartaoId) return avisar('Escolha o cartão usado no pagamento.', 'erro');
     if (inicial && !vencimento) return avisar('Informe a data de vencimento.', 'erro');
     if (inicial && trocou && !s) return avisar('Escolha o solicitante.', 'erro');
 
@@ -192,10 +196,11 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
               valor_centavos: valor,
               descricao,
               data_pagamento: vencimento,
+              meio_pagamento: meio,
               solicitante_id: trocou ? Number(solicitanteId) : undefined,
               cartao_id: cartaoId === ATUAL ? undefined : cartaoId ? Number(cartaoId) : null,
             }
-          : { solicitante_id: Number(solicitanteId), valor_centavos: valor, descricao, cartao_id: cartaoId ? Number(cartaoId) : null },
+          : { solicitante_id: Number(solicitanteId), valor_centavos: valor, descricao, meio_pagamento: meio, cartao_id: meio === 'cartao' && cartaoId ? Number(cartaoId) : null },
       });
       if (novosDocumento.length) await enviarAnexos(r.id, novosDocumento, 'documento');
       if (novosCobranca.length) await enviarAnexos(r.id, novosCobranca, 'cobranca');
@@ -226,7 +231,14 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
               <span>Valor do pagamento</span>
               <CampoMoeda centavos={valor} aoMudar={setValor} />
             </label>
-            {cartoesSol.length > 1 && (
+            <label className="campo">
+              <span>Como foi feito o pagamento</span>
+              <select value={meio} onChange={(e) => setMeio(e.target.value as MeioPagamento | '')} required>
+                <option value="">Selecione</option>
+                {Object.entries(MEIOS_PAGAMENTO).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+              </select>
+            </label>
+            {meio === 'cartao' && cartoesSol.length > 1 && (
               <label className="campo">
                 <span>Cartão</span>
                 <select value={cartaoId} onChange={(e) => setCartaoId(e.target.value)} required>
@@ -248,6 +260,11 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
           {!inicial && meu && String(meu.id) !== solicitanteId && solicitanteId && (
             <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>
               Você está registrando em nome de outra pessoa. <button type="button" className="link" onClick={() => setSolicitanteId(String(meu.id))}>Voltar para {meu.nome}</button>
+            </p>
+          )}
+          {meio === 'cartao' && s && cartoesSol.length === 0 && (
+            <p className="nota nota-alerta" style={{ margin: '12px 0 0' }}>
+              <strong>{s.nome}</strong> não tem cartão cadastrado. Cadastre em <a href="#solicitantes">Solicitantes</a> ou escolha PIX.
             </p>
           )}
           {faltas.length > 0 && (
@@ -314,16 +331,37 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
             <Fixo rotulo="O custo deverá ser atrelado a mais de um centro de custo?" valor={dados.multiplos} classe="coluna-2" />
             <Fixo rotulo="Centro de custo - N5" valor={dados.centro} />
             <label className="campo">
+              <span>Como foi feito o pagamento</span>
+              <select
+                value={meio}
+                onChange={(e) => {
+                  const v = e.target.value as MeioPagamento | '';
+                  setMeio(v);
+                  // Voltando para cartão sem cartão escolhido: usa o registrado ou o único do cadastro
+                  if (v === 'cartao' && !cartaoId) {
+                    if (!trocou && inicial.cartao_final) setCartaoId(ATUAL);
+                    else if (cartoesSol.length === 1) setCartaoId(String(cartoesSol[0].id));
+                  }
+                }}
+                required
+              >
+                <option value="">Selecione</option>
+                {Object.entries(MEIOS_PAGAMENTO).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+              </select>
+            </label>
+            {meio === 'cartao' && (
+            <>
+            <label className="campo">
               <span>Cartão</span>
               <select value={cartaoId} onChange={(e) => setCartaoId(e.target.value)}>
-                <option value="">Sem cartão</option>
+                <option value="">Selecione o cartão</option>
                 {!trocou && inicial.cartao_final && <option value={ATUAL}>Final {inicial.cartao_final} (registrado)</option>}
                 {cartoesSol
                   .filter((k) => trocou || k.id !== inicial.cartao_id)
                   .map((k) => <option key={k.id} value={k.id}>Final {k.final}</option>)}
               </select>
             </label>
-            <div className="campo coluna-2">
+            <div className="campo">
               <span>Comprovante do cartão</span>
               <div className="cartao-registrado">
                 {cartaoId === ATUAL && inicial.cartao_comprovante ? (
@@ -339,6 +377,8 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
                 )}
               </div>
             </div>
+            </>
+            )}
           </div>
         </fieldset>
 

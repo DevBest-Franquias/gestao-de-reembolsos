@@ -87,6 +87,8 @@ export type Solicitante = {
   cartoes: Cartao[];
 };
 export type CategoriaAnexo = 'documento' | 'cobranca';
+export type MeioPagamento = 'pix' | 'cartao';
+export const MEIOS_PAGAMENTO: Record<MeioPagamento, string> = { pix: 'PIX', cartao: 'Cartão' };
 export type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number; categoria: CategoriaAnexo };
 export const CATEGORIAS_ANEXO: Record<CategoriaAnexo, string> = {
   documento: 'Anexo da nota fiscal ou documento de pagamento',
@@ -109,6 +111,7 @@ export type Reembolso = {
   empresa_pagadora: string;
   multiplos_centros_custo: number;
   centro_custo: string;
+  meio_pagamento: MeioPagamento | '';
   cartao_id: number | null;
   cartao_final: string;
   cartao_comprovante: { nome: string; tamanho: number } | null;

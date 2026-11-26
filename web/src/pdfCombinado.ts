@@ -1,5 +1,5 @@
 import type { PDFDocument as TPDFDocument, PDFFont, PDFPage } from 'pdf-lib';
-import { buscarArquivo, STATUS, type Reembolso } from './api';
+import { buscarArquivo, MEIOS_PAGAMENTO, STATUS, type Reembolso } from './api';
 import { formatarData, formatarMoeda, mascaraDocumento } from './formato';
 
 /**
@@ -93,7 +93,7 @@ export async function gerarPdfCombinado(r: Reembolso) {
     },
     {
       titulo: r.cartao_final ? `Imagem do cartão vinculado (final ${r.cartao_final})` : 'Imagem do cartão vinculado',
-      vazio: r.cartao_final ? 'O cartão não tem imagem anexada' : 'Nenhum cartão vinculado à solicitação',
+      vazio: r.meio_pagamento === 'pix' ? 'Não se aplica: pagamento feito por PIX' : r.cartao_final ? 'O cartão não tem imagem anexada' : 'Nenhum cartão vinculado à solicitação',
       arquivos: r.cartao_comprovante ? [{ nome: r.cartao_comprovante.nome, caminho: `/reembolsos/${r.id}/comprovante-cartao` }] : [],
       paginas: null,
     },
@@ -191,7 +191,8 @@ export async function gerarPdfCombinado(r: Reembolso) {
   linha('VALOR', formatarMoeda(r.valor_centavos));
   linha('DATA DE VENCIMENTO', formatarData(r.data_pagamento));
   linha('DESCRIÇÃO', r.descricao);
-  linha('CARTÃO', r.cartao_final ? `Final ${r.cartao_final}` : 'Nenhum cartão vinculado');
+  linha('COMO FOI PAGO', r.meio_pagamento ? MEIOS_PAGAMENTO[r.meio_pagamento] : 'Não informado');
+  if (r.meio_pagamento !== 'pix') linha('CARTÃO', r.cartao_final ? `Final ${r.cartao_final}` : 'Nenhum cartão vinculado');
   linha('STATUS', STATUS[r.status]);
 
   y -= 14;
