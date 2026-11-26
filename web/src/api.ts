@@ -95,6 +95,7 @@ export type Reembolso = {
   empresa_pagadora: string;
   multiplos_centros_custo: number;
   centro_custo: string;
+  cartao_id: number | null;
   cartao_final: string;
   cartao_comprovante: { nome: string; tamanho: number } | null;
   fornecedor_id: number | null;

@@ -483,14 +483,7 @@ app.post('/api/reembolsos', async (c) => {
     if (!cartao) return erro(c, 'Escolha o cartão usado no pagamento.');
   }
   // O comprovante do cartão é copiado para a solicitação, para não depender do cadastro depois
-  let comprovanteCopia: string | null = null;
-  if (cartao?.comprovante_chave_r2) {
-    const obj = await c.env.ANEXOS.get(cartao.comprovante_chave_r2);
-    if (obj) {
-      comprovanteCopia = `reembolsos/cartao/${crypto.randomUUID()}-${(cartao.comprovante_nome || 'comprovante').replace(/[^\w.\-]+/g, '_')}`;
-      await c.env.ANEXOS.put(comprovanteCopia, obj.body, { httpMetadata: obj.httpMetadata });
-    }
-  }
+  const comprovanteCopia = await copiarComprovanteCartao(c.env, cartao);
 
   const dados: Record<string, string | number | null> = {
     solicitante_id: s.id,
@@ -531,18 +524,85 @@ app.post('/api/reembolsos', async (c) => {
   return c.json({ ...publico, cartao_comprovante: cartao_comprovante_chave_r2 ? { nome: publico.cartao_comprovante_nome, tamanho: publico.cartao_comprovante_tamanho } : null, anexos: [] }, 201);
 });
 
-// Edição: só valor e descrição podem mudar
+/** Copia o comprovante do cartão para a solicitação; devolve a chave da cópia */
+async function copiarComprovanteCartao(env: Env, cartao: Cartao | undefined) {
+  if (!cartao?.comprovante_chave_r2) return null;
+  const obj = await env.ANEXOS.get(cartao.comprovante_chave_r2);
+  if (!obj) return null;
+  const chave = `reembolsos/cartao/${crypto.randomUUID()}-${(cartao.comprovante_nome || 'comprovante').replace(/[^\w.\-]+/g, '_')}`;
+  await env.ANEXOS.put(chave, obj.body, { httpMetadata: obj.httpMetadata });
+  return chave;
+}
+
+// Edição: valor, descrição, data de vencimento, solicitante e cartão podem mudar
 app.put('/api/reembolsos/:id', async (c) => {
+  const id = Number(c.req.param('id'));
   const b = await c.req.json().catch(() => ({}));
+  const db = c.env.DB;
+  const atual = await db.prepare('SELECT * FROM reembolsos WHERE id = ?').bind(id).first<Record<string, unknown>>();
+  if (!atual) return erro(c, 'Solicitação não encontrada.', 404);
   const v = lerValorDescricao(b);
   if ('falha' in v) return erro(c, v.falha!);
-  const r = await c.env.DB.prepare(
-    "UPDATE reembolsos SET valor_centavos = ?, descricao = ?, atualizado_em = datetime('now') WHERE id = ? RETURNING *",
-  )
-    .bind(v.valor_centavos, v.descricao, Number(c.req.param('id')))
-    .first();
-  if (!r) return erro(c, 'Solicitação não encontrada.', 404);
-  return c.json(r);
+  const mudancas: Record<string, string | number | null> = { valor_centavos: v.valor_centavos, descricao: v.descricao };
+
+  if (b.data_pagamento !== undefined) {
+    if (!dataValida(b.data_pagamento)) return erro(c, 'Informe uma data de vencimento válida.');
+    mudancas.data_pagamento = String(b.data_pagamento);
+  }
+
+  // Troca de solicitante: os dados passam a vir do cadastro do novo solicitante
+  let solicitanteId = atual.solicitante_id as number | null;
+  const trocouSolicitante = b.solicitante_id !== undefined && b.solicitante_id !== null && Number(b.solicitante_id) !== solicitanteId;
+  if (trocouSolicitante) {
+    const s = await db.prepare('SELECT * FROM solicitantes WHERE id = ?').bind(Number(b.solicitante_id)).first<SolicitanteCompleto>();
+    if (!s) return erro(c, 'Solicitante não encontrado.');
+    const faltas = faltasCadastro(s);
+    if (faltas.length) return erro(c, `Complete o cadastro de ${s.nome} em Solicitantes. Falta: ${listaHumana(faltas)}.`);
+    solicitanteId = s.id;
+    Object.assign(mudancas, {
+      solicitante_id: s.id,
+      solicitante_nome: s.nome,
+      solicitante_email: s.email,
+      solicitante_cpf: s.cpf,
+      fornecedor_nome: s.nome,
+      fornecedor_documento: s.cpf,
+      chave_pix: s.chave_pix,
+      banco: s.banco,
+      agencia: s.agencia,
+      conta: s.conta,
+    });
+  }
+
+  // Cartão: undefined mantém; null retira; número troca (precisa ser do solicitante)
+  let chaveAntiga: string | null = null;
+  const querMudarCartao = b.cartao_id !== undefined && (b.cartao_id === null ? atual.cartao_final !== '' : Number(b.cartao_id) !== atual.cartao_id);
+  if (trocouSolicitante && b.cartao_id === undefined && atual.cartao_final) {
+    return erro(c, 'Escolha o cartão do novo solicitante.');
+  }
+  if (querMudarCartao) {
+    let cartao: Cartao | undefined;
+    if (b.cartao_id !== null) {
+      cartao = (await db.prepare('SELECT * FROM cartoes WHERE id = ? AND solicitante_id = ?').bind(Number(b.cartao_id), solicitanteId).first<Cartao>()) ?? undefined;
+      if (!cartao) return erro(c, 'Cartão não encontrado para esse solicitante.');
+    }
+    const copia = await copiarComprovanteCartao(c.env, cartao);
+    chaveAntiga = (atual.cartao_comprovante_chave_r2 as string | null) ?? null;
+    Object.assign(mudancas, {
+      cartao_id: cartao?.id ?? null,
+      cartao_final: cartao?.final ?? '',
+      cartao_comprovante_chave_r2: copia,
+      cartao_comprovante_nome: copia ? cartao!.comprovante_nome : null,
+      cartao_comprovante_tamanho: copia ? cartao!.comprovante_tamanho : null,
+    });
+  }
+
+  const campos = Object.keys(mudancas);
+  await db
+    .prepare(`UPDATE reembolsos SET ${campos.map((k) => `${k} = ?`).join(', ')}, atualizado_em = datetime('now') WHERE id = ?`)
+    .bind(...campos.map((k) => mudancas[k]), id)
+    .run();
+  if (chaveAntiga) await c.env.ANEXOS.delete(chaveAntiga);
+  return c.json({ ok: true, id });
 });
 
 // Atualização rápida de acompanhamento: status e data do reembolso
