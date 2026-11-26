@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, abrirAnexo, FORMAS, STATUS, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
+import { api, abrirAnexo, STATUS, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
 import ReembolsoForm from '../components/ReembolsoForm';
 import { Modal, avisar, msgErro } from '../components/ui';
 import { formatarData, formatarMoeda, mascaraDocumento } from '../formato';
@@ -81,7 +81,7 @@ export default function Reembolsos() {
             </button>
           ))}
         </div>
-        <input className="busca" placeholder="Buscar solicitante, fornecedor, documento…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input className="busca" placeholder="Buscar por solicitante ou descrição" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <div className="total">
           <span className="mudo">Total filtrado</span>
           <strong>{formatarMoeda(total)}</strong>
@@ -93,26 +93,12 @@ export default function Reembolsos() {
           <thead>
             <tr>
               <th>Nome do solicitante</th>
-              <th>E-mail do solicitante</th>
-              <th>CPF do solicitante</th>
-              <th>Fornecedor novo</th>
-              <th>Nome / Razão social</th>
-              <th>CNPJ / CPF</th>
-              <th>Nº documento</th>
               <th>Data de vencimento</th>
               <th className="num">Valor</th>
               <th>Descrição</th>
-              <th>Forma de pagamento</th>
-              <th>Chave PIX</th>
-              <th>Banco</th>
-              <th>Agência</th>
-              <th>Conta</th>
-              <th>Empresa pagadora</th>
-              <th>Mais de um centro de custo?</th>
-              <th>Centro de custo - N5</th>
-              <th>Anexos</th>
-              <th className="col-acomp col-status">Status</th>
-              <th className="col-acomp col-data">Data do reembolso</th>
+              <th>Anexo</th>
+              <th className="col-acomp">Status</th>
+              <th className="col-acomp">Data do reembolso</th>
               <th className="acoes-col" />
             </tr>
           </thead>
@@ -120,23 +106,9 @@ export default function Reembolsos() {
             {filtrados.map((r) => (
               <tr key={r.id}>
                 <td className="forte">{r.solicitante_nome}</td>
-                <td>{r.solicitante_email}</td>
-                <td className="mono">{r.solicitante_cpf ? mascaraDocumento(r.solicitante_cpf) : <span className="mudo">Não informado</span>}</td>
-                <td>{r.fornecedor_novo ? 'Sim' : 'Não'}</td>
-                <td>{r.fornecedor_nome}</td>
-                <td className="mono">{mascaraDocumento(r.fornecedor_documento)}</td>
-                <td>{r.numero_documento}</td>
                 <td>{formatarData(r.data_pagamento)}</td>
                 <td className="num forte">{formatarMoeda(r.valor_centavos)}</td>
-                <td className="descricao" title={r.descricao}>{r.descricao}</td>
-                <td>{FORMAS[r.forma_pagamento]}</td>
-                <td>{r.chave_pix || <span className="mudo">-</span>}</td>
-                <td>{r.banco || <span className="mudo">-</span>}</td>
-                <td>{r.agencia || <span className="mudo">-</span>}</td>
-                <td>{r.conta || <span className="mudo">-</span>}</td>
-                <td>{r.empresa_pagadora || <span className="mudo">-</span>}</td>
-                <td>{r.empresa_pagadora ? (r.multiplos_centros_custo ? 'Sim' : 'Não') : <span className="mudo">-</span>}</td>
-                <td>{r.centro_custo || <span className="mudo">-</span>}</td>
+                <td className="descricao" title={r.descricao}>{r.descricao || <span className="mudo">-</span>}</td>
                 <td>
                   {r.anexos.length === 0 ? <span className="mudo">Nenhum</span> : (
                     <div className="anexos-celula">
@@ -148,13 +120,13 @@ export default function Reembolsos() {
                     </div>
                   )}
                 </td>
-                <td className="col-acomp col-status">
+                <td className="col-acomp">
                   <select className={`status status-${r.status}`} value={r.status} onChange={(e) => atualizar(r.id, { status: e.target.value as Status })} aria-label="Status">
                     {Object.entries(STATUS).map(([v, rot]) => <option key={v} value={v}>{rot}</option>)}
                   </select>
                 </td>
-                <td className="col-acomp col-data">
-                  <input type="date" className="data-inline" value={r.data_reembolso ?? ''} onChange={(e) => atualizar(r.id, { data_reembolso: e.target.value || null })} aria-label="Data do pagamento do reembolso" />
+                <td className="col-acomp">
+                  <input type="date" className="data-inline" value={r.data_reembolso ?? ''} onChange={(e) => atualizar(r.id, { data_reembolso: e.target.value || null })} aria-label="Data do reembolso" />
                 </td>
                 <td className="acoes">
                   <button className="btn btn-fantasma btn-pequeno" onClick={() => setForm({ item: r })}>Editar</button>
@@ -163,9 +135,9 @@ export default function Reembolsos() {
               </tr>
             ))}
             {!carregando && !filtrados.length && (
-              <tr><td colSpan={22} className="vazio">{lista.length ? 'Nenhuma solicitação com esses filtros.' : 'Nenhuma solicitação registrada ainda.'}</td></tr>
+              <tr><td colSpan={8} className="vazio">{lista.length ? 'Nenhuma solicitação com esses filtros.' : 'Nenhuma solicitação registrada ainda.'}</td></tr>
             )}
-            {carregando && <tr><td colSpan={22} className="vazio">Carregando…</td></tr>}
+            {carregando && <tr><td colSpan={8} className="vazio">Carregando…</td></tr>}
           </tbody>
         </table>
       </div>
