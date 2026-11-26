@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { api, abrirAnexo, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Fornecedor, type Reembolso, type Solicitante, type Usuario } from '../api';
+import { api, abrirAnexo, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
 import { documentoValido, formatarData, mascaraDocumento, proximaTercaOuQuinta, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
@@ -9,7 +9,6 @@ type Props = {
   eu: Usuario;
   inicial: Reembolso | null;
   solicitantes: Solicitante[];
-  fornecedores?: Fornecedor[];
   aoSalvar: () => void;
   aoCancelar: () => void;
 };

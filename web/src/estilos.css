@@ -394,3 +394,5 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 @media (max-width: 860px) {
   .filtro-campo, .filtro-campo select, .filtro-busca .busca { width: 100%; }
 }
+.tabela-reembolsos .anexos-celula { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
+.tabela-reembolsos .anexos-celula .link { font-weight: 600; }

@@ -40,7 +40,14 @@ async function abrirArquivo(caminho: string) {
   const r = await fetch(`${BASE}/api${caminho}`, { headers: { Authorization: `Bearer ${sessao.token}` } });
   if (!r.ok) { janela?.close(); throw new ErroApi('Não foi possível abrir o arquivo.', r.status); }
   const url = URL.createObjectURL(await r.blob());
-  if (janela) janela.location.href = url; else window.location.href = url;
+  if (janela) janela.location.href = url;
+  else {
+    // Navegador bloqueou a nova aba: baixa o arquivo sem sair do sistema
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '';
+    link.click();
+  }
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
@@ -69,7 +76,6 @@ export type Solicitante = {
   banco: string; agencia: string; conta: string; chave_pix: string;
   cartoes: Cartao[];
 };
-export type Fornecedor = { id: number; nome: string; documento: string };
 export type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number };
 export type Status = 'nao_solicitado' | 'solicitado' | 'pago';
 export type Forma = 'boleto' | 'cartao_credito' | 'pix' | 'pix_qr_code';

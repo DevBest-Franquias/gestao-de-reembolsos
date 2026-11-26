@@ -403,48 +403,6 @@ app.delete('/api/cartoes/:id/comprovante', async (c) => {
   return c.json(cartaoPublico(novo!));
 });
 
-/* ---------- Fornecedores ---------- */
-app.get('/api/fornecedores', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM fornecedores ORDER BY nome').all();
-  return c.json(results);
-});
-
-async function lerFornecedor(c: Ctx) {
-  const b = await c.req.json().catch(() => ({}));
-  const nome = texto(b.nome);
-  const documento = soDigitos(b.documento);
-  if (!nome) return { falha: 'Informe o nome ou razão social.' };
-  if (!documentoValido(documento)) return { falha: 'CPF ou CNPJ inválido.' };
-  return { nome, documento };
-}
-
-app.post('/api/fornecedores', async (c) => {
-  const d = await lerFornecedor(c);
-  if ('falha' in d) return erro(c, d.falha!);
-  const existe = await c.env.DB.prepare('SELECT id FROM fornecedores WHERE documento = ?').bind(d.documento).first();
-  if (existe) return erro(c, 'Já existe um fornecedor com esse CPF/CNPJ.', 409);
-  const r = await c.env.DB.prepare('INSERT INTO fornecedores (nome, documento) VALUES (?, ?) RETURNING *').bind(d.nome, d.documento).first();
-  return c.json(r, 201);
-});
-
-app.put('/api/fornecedores/:id', async (c) => {
-  const d = await lerFornecedor(c);
-  if ('falha' in d) return erro(c, d.falha!);
-  const id = Number(c.req.param('id'));
-  const outro = await c.env.DB.prepare('SELECT id FROM fornecedores WHERE documento = ? AND id <> ?').bind(d.documento, id).first();
-  if (outro) return erro(c, 'Já existe um fornecedor com esse CPF/CNPJ.', 409);
-  const r = await c.env.DB.prepare('UPDATE fornecedores SET nome = ?, documento = ? WHERE id = ? RETURNING *')
-    .bind(d.nome, d.documento, id)
-    .first();
-  if (!r) return erro(c, 'Fornecedor não encontrado.', 404);
-  return c.json(r);
-});
-
-app.delete('/api/fornecedores/:id', async (c) => {
-  await c.env.DB.prepare('DELETE FROM fornecedores WHERE id = ?').bind(Number(c.req.param('id'))).run();
-  return c.json({ ok: true });
-});
-
 /* ---------- Reembolsos ---------- */
 type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number; criado_em: string };
 

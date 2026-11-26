@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, abrirAnexo, STATUS, type Usuario, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
+import { api, abrirAnexo, STATUS, type Usuario, type Reembolso, type Solicitante, type Status } from '../api';
 import ReembolsoForm from '../components/ReembolsoForm';
 import { Modal, avisar, msgErro } from '../components/ui';
 import { formatarData, formatarMoeda, mascaraDocumento } from '../formato';
@@ -9,7 +9,6 @@ type Filtro = Status | 'todos';
 export default function Reembolsos({ eu }: { eu: Usuario }) {
   const [lista, setLista] = useState<Reembolso[]>([]);
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
-  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [form, setForm] = useState<{ item: Reembolso | null } | null>(null);
   const [filtro, setFiltro] = useState<Filtro>('todos');
@@ -18,12 +17,11 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
 
   const carregar = async () => {
     try {
-      const [r, s, f] = await Promise.all([
+      const [r, s] = await Promise.all([
         api<Reembolso[]>('/reembolsos'),
         api<Solicitante[]>('/solicitantes'),
-        api<Fornecedor[]>('/fornecedores'),
       ]);
-      setLista(r); setSolicitantes(s); setFornecedores(f);
+      setLista(r); setSolicitantes(s);
     } catch (e) { avisar(msgErro(e), 'erro'); }
     finally { setCarregando(false); }
   };
@@ -148,9 +146,9 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
                 <td data-rotulo="Anexo">
                   {r.anexos.length === 0 ? <span className="mudo">Nenhum</span> : (
                     <div className="anexos-celula">
-                      {r.anexos.map((a) => (
-                        <button key={a.id} className="link" title={a.nome_arquivo} onClick={() => abrirAnexo(a.id).catch((e) => avisar(msgErro(e), 'erro'))}>
-                          {a.nome_arquivo}
+                      {r.anexos.map((a, i) => (
+                        <button key={a.id} className="link" title={`Abrir ${a.nome_arquivo} em uma nova aba`} onClick={() => abrirAnexo(a.id).catch((e) => avisar(msgErro(e), 'erro'))}>
+                          {r.anexos.length > 1 ? `Abrir ${i + 1}` : 'Abrir'}
                         </button>
                       ))}
                     </div>
@@ -194,7 +192,6 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
               eu={eu}
               inicial={form.item}
               solicitantes={solicitantes}
-              fornecedores={fornecedores}
               aoCancelar={() => setForm(null)}
               aoSalvar={() => { setForm(null); carregar(); }}
             />

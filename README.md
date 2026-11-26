@@ -13,8 +13,7 @@ Sistema interno da Best Franquias para registrar solicitações de reembolso e a
 - Lista de reembolsos com filtros por status, busca e total em R$ do que está filtrado
 - Status (Não solicitado, Solicitado, Pago) e Data do reembolso editáveis direto na linha
 - Ao marcar como **Pago** sem data, o sistema preenche com a data de hoje
-- Cadastro de **solicitantes** e **fornecedores**; ao escolher na solicitação, os dados entram sozinhos
-- Fornecedor novo informado na solicitação entra no cadastro automaticamente
+- Cadastro de **solicitantes** com CPF, dados bancários e cartões; a nova solicitação já vem preenchida com o solicitante do usuário logado
 - Validação de CPF/CNPJ, valor com formatação monetária, vários anexos por solicitação
 - Login com e-mail e senha; administradores gerenciam os usuários
 
@@ -90,7 +89,7 @@ api/
   src/index.ts     rotas da API
   wrangler.toml    configuração do Worker, D1 e R2
 web/
-  src/pages/       telas (reembolsos, solicitantes, fornecedores, usuários, login)
+  src/pages/       telas (reembolsos, solicitantes, usuários, login)
   src/components/  formulário de reembolso e componentes de interface
   vercel.json      roteamento da SPA
 ```
