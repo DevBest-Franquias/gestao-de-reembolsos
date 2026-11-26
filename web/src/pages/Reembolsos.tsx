@@ -90,6 +90,16 @@ export default function Reembolsos() {
 
       <div className="tabela-caixa">
         <table className="tabela tabela-reembolsos">
+          <colgroup>
+            <col className="c-nome" />
+            <col className="c-venc" />
+            <col className="c-valor" />
+            <col />
+            <col className="c-anexo" />
+            <col className="c-status" />
+            <col className="c-data" />
+            <col className="c-acoes" />
+          </colgroup>
           <thead>
             <tr>
               <th>Nome do solicitante</th>
@@ -105,11 +115,11 @@ export default function Reembolsos() {
           <tbody>
             {filtrados.map((r) => (
               <tr key={r.id}>
-                <td className="forte">{r.solicitante_nome}</td>
-                <td>{formatarData(r.data_pagamento)}</td>
-                <td className="num forte">{formatarMoeda(r.valor_centavos)}</td>
-                <td className="descricao" title={r.descricao}>{r.descricao || <span className="mudo">-</span>}</td>
-                <td>
+                <td className="forte c-nome-td" data-rotulo="Solicitante">{r.solicitante_nome}</td>
+                <td data-rotulo="Vencimento">{formatarData(r.data_pagamento) || <span className="mudo">-</span>}</td>
+                <td className="num forte" data-rotulo="Valor">{formatarMoeda(r.valor_centavos)}</td>
+                <td className="descricao" data-rotulo="Descrição" title={r.descricao}><span className="duas-linhas">{r.descricao || <span className="mudo">-</span>}</span></td>
+                <td data-rotulo="Anexo">
                   {r.anexos.length === 0 ? <span className="mudo">Nenhum</span> : (
                     <div className="anexos-celula">
                       {r.anexos.map((a) => (
@@ -120,17 +130,27 @@ export default function Reembolsos() {
                     </div>
                   )}
                 </td>
-                <td className="col-acomp">
+                <td className="col-acomp" data-rotulo="Status">
                   <select className={`status status-${r.status}`} value={r.status} onChange={(e) => atualizar(r.id, { status: e.target.value as Status })} aria-label="Status">
                     {Object.entries(STATUS).map(([v, rot]) => <option key={v} value={v}>{rot}</option>)}
                   </select>
                 </td>
-                <td className="col-acomp">
+                <td className="col-acomp" data-rotulo="Data do reembolso">
                   <input type="date" className="data-inline" value={r.data_reembolso ?? ''} onChange={(e) => atualizar(r.id, { data_reembolso: e.target.value || null })} aria-label="Data do reembolso" />
                 </td>
                 <td className="acoes">
-                  <button className="btn btn-fantasma btn-pequeno" onClick={() => setForm({ item: r })}>Editar</button>
-                  <button className="btn btn-fantasma btn-pequeno perigo" onClick={() => excluir(r)}>Excluir</button>
+                  <button className="icone-acao" onClick={() => setForm({ item: r })} aria-label="Editar" title="Editar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                    <span className="acao-texto">Editar</span>
+                  </button>
+                  <button className="icone-acao perigo" onClick={() => excluir(r)} aria-label="Excluir" title="Excluir">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" />
+                    </svg>
+                    <span className="acao-texto">Excluir</span>
+                  </button>
                 </td>
               </tr>
             ))}

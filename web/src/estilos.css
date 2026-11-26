@@ -160,8 +160,6 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 .tabela .vazio { text-align: center; color: var(--n-500); padding: 40px; }
 .tabela .acoes { text-align: right; white-space: nowrap; }
 .acoes-col { width: 1%; }
-.tabela-reembolsos td { white-space: nowrap; }
-.tabela-reembolsos .descricao { max-width: 380px; width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .tabela-reembolsos th.col-acomp { background: var(--roxo-50); color: var(--roxo-escuro); }
 .tabela-reembolsos td.col-acomp { background: #fbf9ff; }
 .anexos-celula { display: flex; flex-direction: column; gap: 2px; max-width: 180px; }
@@ -339,3 +337,51 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 .db-rotulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--n-500); width: 100%; }
 .coluna-3 { grid-column: span 3; }
 @media (max-width: 860px) { .coluna-3 { grid-column: auto; } }
+
+/* ---------- Tabela de reembolsos sem rolagem lateral ---------- */
+.tabela-reembolsos { table-layout: fixed; }
+.tabela-reembolsos .c-nome { width: 15%; }
+.tabela-reembolsos .c-venc { width: 112px; }
+.tabela-reembolsos .c-valor { width: 118px; }
+.tabela-reembolsos .c-anexo { width: 13%; }
+.tabela-reembolsos .c-status { width: 178px; }
+.tabela-reembolsos .c-data { width: 154px; }
+.tabela-reembolsos .c-acoes { width: 92px; }
+.tabela-reembolsos th { white-space: normal; line-height: 1.3; }
+.tabela-reembolsos th, .tabela-reembolsos td { padding-left: 12px; padding-right: 12px; }
+.tabela-reembolsos td { overflow: hidden; overflow-wrap: anywhere; }
+.tabela-reembolsos td.num, .tabela-reembolsos .acoes { white-space: nowrap; }
+.duas-linhas { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tabela-reembolsos .anexos-celula { max-width: none; }
+.tabela-reembolsos .status { width: 100%; min-width: 0; padding-left: 10px; padding-right: 26px; }
+.tabela-reembolsos .data-inline { width: 100%; padding-left: 8px; padding-right: 6px; }
+.icone-acao {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; cursor: pointer;
+  color: var(--roxo-escuro); padding: 7px; border-radius: 999px; font-weight: 600; transition: background var(--anim);
+}
+.icone-acao:hover { background: var(--roxo-50); }
+.icone-acao.perigo { color: var(--vermelho); }
+.icone-acao.perigo:hover { background: var(--vermelho-50); }
+.acao-texto { display: none; }
+
+/* Telas menores: cada reembolso vira um cartão */
+@media (max-width: 1100px) {
+  .tabela-caixa:has(.tabela-reembolsos) { background: transparent; border: 0; box-shadow: none; overflow: visible; }
+  .tabela-reembolsos, .tabela-reembolsos tbody { display: block; }
+  .tabela-reembolsos colgroup, .tabela-reembolsos thead { display: none; }
+  .tabela-reembolsos tr {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 16px; margin-bottom: 12px; padding: 14px 16px;
+    background: #fff; border: 1px solid var(--n-200); border-radius: 20px; box-shadow: var(--sombra-1);
+  }
+  .tabela-reembolsos tbody tr:hover td { background: transparent; }
+  .tabela-reembolsos td { display: flex; flex-direction: column; gap: 4px; padding: 0 !important; border: 0; text-align: left; background: transparent !important; }
+  .tabela-reembolsos td.num { text-align: left; }
+  .tabela-reembolsos td[data-rotulo]::before {
+    content: attr(data-rotulo); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--n-500);
+  }
+  .tabela-reembolsos .c-nome-td { grid-column: 1 / -1; font-size: 16px; }
+  .tabela-reembolsos .descricao, .tabela-reembolsos td[data-rotulo="Anexo"] { grid-column: 1 / -1; }
+  .tabela-reembolsos .acoes { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--n-100) !important; padding-top: 8px !important; }
+  .tabela-reembolsos .acao-texto { display: inline; }
+  .tabela-reembolsos .vazio { grid-column: 1 / -1; display: block; }
+}
