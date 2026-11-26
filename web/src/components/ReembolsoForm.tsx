@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { api, abrirAnexo, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
+import { api, abrirAnexo, abrirComprovanteCartaoReembolso, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
 import { documentoValido, formatarData, mascaraDocumento, proximaTercaOuQuinta, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
@@ -50,12 +50,15 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
     inicial ? (inicial.solicitante_id ? String(inicial.solicitante_id) : '') : meu ? String(meu.id) : '',
   );
   const [valor, setValor] = useState(inicial?.valor_centavos ?? 0);
+  const [cartaoId, setCartaoId] = useState('');
   const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
   const [anexos, setAnexos] = useState<Anexo[]>(inicial?.anexos ?? []);
   const [novosArquivos, setNovosArquivos] = useState<File[]>([]);
   const [salvando, setSalvando] = useState(false);
 
   const s = solicitantes.find((x) => String(x.id) === solicitanteId);
+  // Só pede o cartão quando o solicitante tem mais de um; com um só, a API usa ele sozinha
+  const cartoesSol = s?.cartoes ?? [];
 
   // Na edição, mostra o que foi registrado; numa nova solicitação, o que vem do cadastro
   const dados = inicial
@@ -107,12 +110,13 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
     if (!inicial && !s) return avisar('Escolha o solicitante.', 'erro');
     if (faltas.length) return avisar('Complete o cadastro do solicitante antes de registrar.', 'erro');
     if (!valor) return avisar('Informe o valor do pagamento.', 'erro');
+    if (!inicial && cartoesSol.length > 1 && !cartaoId) return avisar('Escolha o cartão usado no pagamento.', 'erro');
 
     setSalvando(true);
     try {
       const r = await api<Reembolso>(inicial ? `/reembolsos/${inicial.id}` : '/reembolsos', {
         method: inicial ? 'PUT' : 'POST',
-        json: inicial ? { valor_centavos: valor, descricao } : { solicitante_id: Number(solicitanteId), valor_centavos: valor, descricao },
+        json: inicial ? { valor_centavos: valor, descricao } : { solicitante_id: Number(solicitanteId), valor_centavos: valor, descricao, cartao_id: cartaoId ? Number(cartaoId) : null },
       });
       if (novosArquivos.length) await enviarAnexos(r.id, novosArquivos);
       avisar(inicial ? 'Solicitação atualizada.' : 'Solicitação registrada.');
@@ -133,7 +137,7 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
           <div className="grade grade-2">
             <label className="campo coluna-2">
               <span>Nome do solicitante</span>
-              <select value={solicitanteId} onChange={(e) => setSolicitanteId(e.target.value)} required>
+              <select value={solicitanteId} onChange={(e) => { setSolicitanteId(e.target.value); setCartaoId(''); }} required>
                 <option value="">Selecione</option>
                 {solicitantes.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
               </select>
@@ -142,6 +146,15 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
               <span>Valor do pagamento</span>
               <CampoMoeda centavos={valor} aoMudar={setValor} />
             </label>
+            {cartoesSol.length > 1 && (
+              <label className="campo">
+                <span>Cartão</span>
+                <select value={cartaoId} onChange={(e) => setCartaoId(e.target.value)} required>
+                  <option value="">Selecione o cartão</option>
+                  {cartoesSol.map((k) => <option key={k.id} value={k.id}>Final {k.final}</option>)}
+                </select>
+              </label>
+            )}
             <label className="campo coluna-2">
               <span>Descrição do pagamento</span>
               <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} autoFocus={!!meu} />
@@ -228,6 +241,19 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
             <Fixo rotulo="Empresa pagadora" valor={dados.empresa} classe="coluna-3" />
             <Fixo rotulo="O custo deverá ser atrelado a mais de um centro de custo?" valor={dados.multiplos} classe="coluna-2" />
             <Fixo rotulo="Centro de custo - N5" valor={dados.centro} />
+            {inicial && (
+              <div className="campo coluna-3">
+                <span>Cartão</span>
+                <div className="cartao-registrado">
+                  {inicial.cartao_final ? <strong>•••• {inicial.cartao_final}</strong> : <span className="mudo">Nenhum cartão vinculado</span>}
+                  {inicial.cartao_comprovante && (
+                    <button type="button" className="link" onClick={() => abrirComprovanteCartaoReembolso(inicial.id).catch((e) => avisar(msgErro(e), 'erro'))}>
+                      Abrir comprovante do cartão
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
                 </fieldset>
 

@@ -34,6 +34,7 @@ export async function api<T = unknown>(caminho: string, opcoes: RequestInit & { 
 
 export const abrirAnexo = (id: number) => abrirArquivo(`/anexos/${id}`);
 export const abrirComprovante = (cartaoId: number) => abrirArquivo(`/cartoes/${cartaoId}/comprovante`);
+export const abrirComprovanteCartaoReembolso = (reembolsoId: number) => abrirArquivo(`/reembolsos/${reembolsoId}/comprovante-cartao`);
 
 async function abrirArquivo(caminho: string) {
   const janela = window.open('', '_blank');
@@ -94,6 +95,8 @@ export type Reembolso = {
   empresa_pagadora: string;
   multiplos_centros_custo: number;
   centro_custo: string;
+  cartao_final: string;
+  cartao_comprovante: { nome: string; tamanho: number } | null;
   fornecedor_id: number | null;
   fornecedor_nome: string;
   fornecedor_documento: string;

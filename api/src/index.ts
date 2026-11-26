@@ -417,7 +417,13 @@ app.get('/api/reembolsos', async (c) => {
     lista.push(a);
     porReembolso.set(a.reembolso_id, lista);
   }
-  return c.json(results.map((r) => ({ ...r, anexos: porReembolso.get(r.id as number) ?? [] })));
+  return c.json(
+    results.map(({ cartao_comprovante_chave_r2, ...r }) => ({
+      ...r,
+      cartao_comprovante: cartao_comprovante_chave_r2 ? { nome: r.cartao_comprovante_nome, tamanho: r.cartao_comprovante_tamanho } : null,
+      anexos: porReembolso.get(r.id as number) ?? [],
+    })),
+  );
 });
 
 /* Valores fixos da solicitação de reembolso */
@@ -468,6 +474,24 @@ app.post('/api/reembolsos', async (c) => {
   const v = lerValorDescricao(b);
   if ('falha' in v) return erro(c, v.falha!);
 
+  // Cartão: com um só, usa ele; com vários, precisa escolher; sem nenhum, segue sem cartão
+  const { results: cartoes } = await c.env.DB.prepare('SELECT * FROM cartoes WHERE solicitante_id = ? ORDER BY id').bind(s.id).all<Cartao>();
+  let cartao: Cartao | undefined;
+  if (cartoes.length === 1) cartao = cartoes[0];
+  else if (cartoes.length > 1) {
+    cartao = cartoes.find((k) => k.id === Number(b.cartao_id));
+    if (!cartao) return erro(c, 'Escolha o cartão usado no pagamento.');
+  }
+  // O comprovante do cartão é copiado para a solicitação, para não depender do cadastro depois
+  let comprovanteCopia: string | null = null;
+  if (cartao?.comprovante_chave_r2) {
+    const obj = await c.env.ANEXOS.get(cartao.comprovante_chave_r2);
+    if (obj) {
+      comprovanteCopia = `reembolsos/cartao/${crypto.randomUUID()}-${(cartao.comprovante_nome || 'comprovante').replace(/[^\w.\-]+/g, '_')}`;
+      await c.env.ANEXOS.put(comprovanteCopia, obj.body, { httpMetadata: obj.httpMetadata });
+    }
+  }
+
   const dados: Record<string, string | number | null> = {
     solicitante_id: s.id,
     solicitante_nome: s.nome,
@@ -490,6 +514,11 @@ app.post('/api/reembolsos', async (c) => {
     empresa_pagadora: EMPRESA_PAGADORA,
     multiplos_centros_custo: 0,
     centro_custo: CENTRO_CUSTO_N5,
+    cartao_id: cartao?.id ?? null,
+    cartao_final: cartao?.final ?? '',
+    cartao_comprovante_chave_r2: comprovanteCopia,
+    cartao_comprovante_nome: comprovanteCopia ? cartao!.comprovante_nome : null,
+    cartao_comprovante_tamanho: comprovanteCopia ? cartao!.comprovante_tamanho : null,
     criado_por: c.get('usuario').id,
   };
   const campos = Object.keys(dados);
@@ -497,8 +526,9 @@ app.post('/api/reembolsos', async (c) => {
     `INSERT INTO reembolsos (${campos.join(', ')}) VALUES (${campos.map(() => '?').join(', ')}) RETURNING *`,
   )
     .bind(...campos.map((k) => dados[k]))
-    .first();
-  return c.json({ ...r, anexos: [] }, 201);
+    .first<Record<string, unknown>>();
+  const { cartao_comprovante_chave_r2, ...publico } = r!;
+  return c.json({ ...publico, cartao_comprovante: cartao_comprovante_chave_r2 ? { nome: publico.cartao_comprovante_nome, tamanho: publico.cartao_comprovante_tamanho } : null, anexos: [] }, 201);
 });
 
 // Edição: só valor e descrição podem mudar
@@ -544,9 +574,27 @@ app.delete('/api/reembolsos/:id', async (c) => {
   const id = Number(c.req.param('id'));
   const { results } = await c.env.DB.prepare('SELECT chave_r2 FROM anexos WHERE reembolso_id = ?').bind(id).all<{ chave_r2: string }>();
   if (results.length) await c.env.ANEXOS.delete(results.map((a) => a.chave_r2));
+  const rb = await c.env.DB.prepare('SELECT cartao_comprovante_chave_r2 AS k FROM reembolsos WHERE id = ?').bind(id).first<{ k: string | null }>();
+  if (rb?.k) await c.env.ANEXOS.delete(rb.k);
   await c.env.DB.prepare('DELETE FROM anexos WHERE reembolso_id = ?').bind(id).run();
   await c.env.DB.prepare('DELETE FROM reembolsos WHERE id = ?').bind(id).run();
   return c.json({ ok: true });
+});
+
+// Comprovante do cartão guardado na solicitação
+app.get('/api/reembolsos/:id/comprovante-cartao', async (c) => {
+  const r = await c.env.DB.prepare('SELECT cartao_comprovante_chave_r2 AS k, cartao_comprovante_nome AS nome FROM reembolsos WHERE id = ?')
+    .bind(Number(c.req.param('id')))
+    .first<{ k: string | null; nome: string | null }>();
+  if (!r?.k) return erro(c, 'Comprovante do cartão não encontrado.', 404);
+  const obj = await c.env.ANEXOS.get(r.k);
+  if (!obj) return erro(c, 'Arquivo não encontrado no armazenamento.', 404);
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(r.nome || 'comprovante')}`,
+    },
+  });
 });
 
 /* ---------- Anexos (R2) ---------- */

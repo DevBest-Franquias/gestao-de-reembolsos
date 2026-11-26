@@ -396,3 +396,7 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 }
 .tabela-reembolsos .anexos-celula { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
 .tabela-reembolsos .anexos-celula .link { font-weight: 600; }
+.cartao-registrado {
+  display: flex; align-items: center; gap: 16px; min-height: 42px; padding: 8px 14px; border-radius: 14px;
+  background: var(--n-50); border: 1px solid var(--n-200); font-variant-numeric: tabular-nums;
+}
