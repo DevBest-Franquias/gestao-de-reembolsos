@@ -52,9 +52,10 @@ async function abrirArquivo(caminho: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export async function enviarAnexos(reembolsoId: number, arquivos: File[]) {
+export async function enviarAnexos(reembolsoId: number, arquivos: File[], categoria: CategoriaAnexo = 'documento') {
   const fd = new FormData();
   arquivos.forEach((f) => fd.append('arquivos', f));
+  fd.append('categoria', categoria);
   return api<Anexo[]>(`/reembolsos/${reembolsoId}/anexos`, { method: 'POST', body: fd });
 }
 
@@ -77,7 +78,12 @@ export type Solicitante = {
   banco: string; agencia: string; conta: string; chave_pix: string;
   cartoes: Cartao[];
 };
-export type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number };
+export type CategoriaAnexo = 'documento' | 'cobranca';
+export type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number; categoria: CategoriaAnexo };
+export const CATEGORIAS_ANEXO: Record<CategoriaAnexo, string> = {
+  documento: 'Anexo da nota fiscal ou documento de pagamento',
+  cobranca: 'Anexo do print de cobrança do cartão ou comprovante de envio de Pix',
+};
 export type Status = 'nao_solicitado' | 'solicitado' | 'pago';
 export type Forma = 'boleto' | 'cartao_credito' | 'pix' | 'pix_qr_code';
 export type Reembolso = {

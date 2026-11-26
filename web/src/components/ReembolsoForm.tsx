@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { api, abrirAnexo, abrirComprovanteCartaoReembolso, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
+import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { api, abrirAnexo, CATEGORIAS_ANEXO, abrirComprovanteCartaoReembolso, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Reembolso, type Solicitante, type Usuario } from '../api';
 import { documentoValido, formatarData, mascaraDocumento, proximaTercaOuQuinta, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
@@ -7,6 +7,58 @@ import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 const ATUAL = 'atual';
 
 const DICA_ANEXO = 'Nota fiscal / boleto / chave pix / outros (podem ser enviados vários arquivos separados)';
+
+/** Área de anexos de um tipo: arquivos já enviados e novos a enviar */
+function CampoAnexos({ titulo, dica, existentes, novos, setNovos, aoRemover }: {
+  titulo: string;
+  dica: string;
+  existentes: Anexo[];
+  novos: File[];
+  setNovos: Dispatch<SetStateAction<File[]>>;
+  aoRemover: (a: Anexo) => void;
+}) {
+  return (
+    <fieldset className="grupo">
+      <legend>
+        {titulo} <Dica texto={dica} />
+      </legend>
+      {existentes.length > 0 && (
+        <ul className="anexos-lista">
+          {existentes.map((a) => (
+            <li key={a.id}>
+              <button type="button" className="link" onClick={() => abrirAnexo(a.id).catch((e) => avisar(msgErro(e), 'erro'))}>{a.nome_arquivo}</button>
+              <span className="mudo pequeno">{tamanhoArquivo(a.tamanho)}</span>
+              <button type="button" className="icone-btn" aria-label={`Excluir ${a.nome_arquivo}`} onClick={() => aoRemover(a)}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <label className="soltar">
+        <input
+          type="file"
+          multiple
+          onChange={(e) => {
+            const fs = Array.from(e.target.files ?? []);
+            setNovos((l) => [...l, ...fs]);
+            e.target.value = '';
+          }}
+        />
+        <span><strong>Escolher arquivos</strong> ou arraste aqui. Até 20 MB cada.</span>
+      </label>
+      {novos.length > 0 && (
+        <ul className="anexos-lista">
+          {novos.map((f, i) => (
+            <li key={i}>
+              <span>{f.name}</span>
+              <span className="mudo pequeno">{tamanhoArquivo(f.size)}</span>
+              <button type="button" className="icone-btn" aria-label={`Remover ${f.name}`} onClick={() => setNovos((l) => l.filter((_, j) => j !== i))}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </fieldset>
+  );
+}
 
 type Props = {
   eu: Usuario;
@@ -57,7 +109,8 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
   const [vencimento, setVencimento] = useState(inicial?.data_pagamento ?? '');
   const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
   const [anexos, setAnexos] = useState<Anexo[]>(inicial?.anexos ?? []);
-  const [novosArquivos, setNovosArquivos] = useState<File[]>([]);
+  const [novosDocumento, setNovosDocumento] = useState<File[]>([]);
+  const [novosCobranca, setNovosCobranca] = useState<File[]>([]);
   const [salvando, setSalvando] = useState(false);
 
   const s = solicitantes.find((x) => String(x.id) === solicitanteId);
@@ -144,7 +197,8 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
             }
           : { solicitante_id: Number(solicitanteId), valor_centavos: valor, descricao, cartao_id: cartaoId ? Number(cartaoId) : null },
       });
-      if (novosArquivos.length) await enviarAnexos(r.id, novosArquivos);
+      if (novosDocumento.length) await enviarAnexos(r.id, novosDocumento, 'documento');
+      if (novosCobranca.length) await enviarAnexos(r.id, novosCobranca, 'cobranca');
       avisar(inicial ? 'Solicitação atualizada.' : 'Solicitação registrada.');
       aoSalvar();
     } catch (e) {
@@ -291,45 +345,23 @@ export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoC
         </>
       )}
 
-      <fieldset className="grupo">
-        <legend>
-          Anexo da solicitação <Dica texto={DICA_ANEXO} />
-        </legend>
-        {anexos.length > 0 && (
-          <ul className="anexos-lista">
-            {anexos.map((a) => (
-              <li key={a.id}>
-                <button type="button" className="link" onClick={() => abrirAnexo(a.id).catch((e) => avisar(msgErro(e), 'erro'))}>{a.nome_arquivo}</button>
-                <span className="mudo pequeno">{tamanhoArquivo(a.tamanho)}</span>
-                <button type="button" className="icone-btn" aria-label={`Excluir ${a.nome_arquivo}`} onClick={() => removerAnexo(a)}>×</button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <label className="soltar">
-          <input
-            type="file"
-            multiple
-            onChange={(e) => {
-              const fs = Array.from(e.target.files ?? []);
-              setNovosArquivos((l) => [...l, ...fs]);
-              e.target.value = '';
-            }}
-          />
-          <span><strong>Escolher arquivos</strong> ou arraste aqui. Até 20 MB cada.</span>
-        </label>
-        {novosArquivos.length > 0 && (
-          <ul className="anexos-lista">
-            {novosArquivos.map((f, i) => (
-              <li key={i}>
-                <span>{f.name}</span>
-                <span className="mudo pequeno">{tamanhoArquivo(f.size)}</span>
-                <button type="button" className="icone-btn" aria-label={`Remover ${f.name}`} onClick={() => setNovosArquivos((l) => l.filter((_, j) => j !== i))}>×</button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </fieldset>
+      <CampoAnexos
+        titulo={CATEGORIAS_ANEXO.documento}
+        dica={DICA_ANEXO}
+        existentes={anexos.filter((a) => (a.categoria ?? 'documento') === 'documento')}
+        novos={novosDocumento}
+        setNovos={setNovosDocumento}
+        aoRemover={removerAnexo}
+      />
+
+      <CampoAnexos
+        titulo={CATEGORIAS_ANEXO.cobranca}
+        dica="Print da cobrança na fatura do cartão ou comprovante do Pix enviado (podem ser enviados vários arquivos separados)"
+        existentes={anexos.filter((a) => a.categoria === 'cobranca')}
+        novos={novosCobranca}
+        setNovos={setNovosCobranca}
+        aoRemover={removerAnexo}
+      />
 
       <div className="form-rodape">
         <button type="button" className="btn btn-fantasma" onClick={aoCancelar}>Cancelar</button>

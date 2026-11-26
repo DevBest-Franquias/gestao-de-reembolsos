@@ -404,12 +404,13 @@ app.delete('/api/cartoes/:id/comprovante', async (c) => {
 });
 
 /* ---------- Reembolsos ---------- */
-type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number; criado_em: string };
+type Anexo = { id: number; reembolso_id: number; nome_arquivo: string; tipo: string; tamanho: number; categoria: string; criado_em: string };
+const CATEGORIAS_ANEXO = ['documento', 'cobranca'] as const;
 
 app.get('/api/reembolsos', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM reembolsos ORDER BY id DESC').all<Record<string, unknown>>();
   const { results: anexos } = await c.env.DB.prepare(
-    'SELECT id, reembolso_id, nome_arquivo, tipo, tamanho, criado_em FROM anexos ORDER BY id',
+    'SELECT id, reembolso_id, nome_arquivo, tipo, tamanho, categoria, criado_em FROM anexos ORDER BY id',
   ).all<Anexo>();
   const porReembolso = new Map<number, Anexo[]>();
   for (const a of anexos) {
@@ -664,6 +665,8 @@ app.post('/api/reembolsos/:id/anexos', async (c) => {
   if (!existe) return erro(c, 'Solicitação não encontrada.', 404);
   const form = await c.req.formData();
   const arquivos = form.getAll('arquivos').filter((f): f is File => typeof f !== 'string');
+  const categoria = String(form.get('categoria') ?? 'documento');
+  if (!CATEGORIAS_ANEXO.includes(categoria as (typeof CATEGORIAS_ANEXO)[number])) return erro(c, 'Tipo de anexo inválido.');
   if (!arquivos.length) return erro(c, 'Nenhum arquivo enviado.');
   const salvos: Anexo[] = [];
   for (const f of arquivos) {
@@ -671,9 +674,9 @@ app.post('/api/reembolsos/:id/anexos', async (c) => {
     const chave = `reembolsos/${id}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
     await c.env.ANEXOS.put(chave, f.stream(), { httpMetadata: { contentType: f.type || 'application/octet-stream' } });
     const a = await c.env.DB.prepare(
-      'INSERT INTO anexos (reembolso_id, chave_r2, nome_arquivo, tipo, tamanho) VALUES (?, ?, ?, ?, ?) RETURNING id, reembolso_id, nome_arquivo, tipo, tamanho, criado_em',
+      'INSERT INTO anexos (reembolso_id, chave_r2, nome_arquivo, tipo, tamanho, categoria) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, reembolso_id, nome_arquivo, tipo, tamanho, categoria, criado_em',
     )
-      .bind(id, chave, f.name, f.type || 'application/octet-stream', f.size)
+      .bind(id, chave, f.name, f.type || 'application/octet-stream', f.size, categoria)
       .first<Anexo>();
     salvos.push(a!);
   }

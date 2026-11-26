@@ -152,7 +152,7 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
                   {r.anexos.length === 0 ? <span className="mudo">Nenhum</span> : (
                     <div className="anexos-celula">
                       {r.anexos.map((a, i) => (
-                        <button key={a.id} className="link" title={`Abrir ${a.nome_arquivo} em uma nova aba`} onClick={() => abrirAnexo(a.id).catch((e) => avisar(msgErro(e), 'erro'))}>
+                        <button key={a.id} className="link" title={`${a.categoria === 'cobranca' ? 'Print de cobrança / comprovante de Pix' : 'Nota fiscal / documento de pagamento'}: ${a.nome_arquivo}`} onClick={() => abrirAnexo(a.id).catch((e) => avisar(msgErro(e), 'erro'))}>
                           {r.anexos.length > 1 ? `Abrir ${i + 1}` : 'Abrir'}
                         </button>
                       ))}
