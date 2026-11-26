@@ -400,3 +400,7 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
   display: flex; align-items: center; gap: 16px; min-height: 42px; padding: 8px 14px; border-radius: 14px;
   background: var(--n-50); border: 1px solid var(--n-200); font-variant-numeric: tabular-nums;
 }
+.topo-acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-contorno { background: #fff; color: var(--roxo-escuro); border-color: var(--roxo-200); text-decoration: none; display: inline-flex; align-items: center; }
+.btn-contorno:hover { background: var(--roxo-50); border-color: var(--roxo-claro); }
+@media (max-width: 860px) { .topo-acoes > * { flex: 1; justify-content: center; } }

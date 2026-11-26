@@ -78,7 +78,12 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
           <h1>Reembolsos</h1>
           <p className="mudo">Registre as solicitações e acompanhe o andamento de cada uma.</p>
         </div>
-        <button className="btn btn-primario" onClick={() => setForm({ item: null })}>Nova solicitação</button>
+        <div className="topo-acoes">
+          <a className="btn btn-contorno" href="https://hubsmart.bitrix24.site/solicitacao_pag_investidas/" target="_blank" rel="noopener noreferrer">
+            Link do bitrix
+          </a>
+          <button className="btn btn-primario" onClick={() => setForm({ item: null })}>Nova solicitação</button>
+        </div>
       </div>
 
       <div className="filtros">
