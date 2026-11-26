@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { api, abrirAnexo, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Fornecedor, type Reembolso, type Solicitante } from '../api';
+import { api, abrirAnexo, enviarAnexos, CENTRO_CUSTO_N5, EMPRESA_PAGADORA, type Anexo, type Fornecedor, type Reembolso, type Solicitante, type Usuario } from '../api';
 import { documentoValido, formatarData, mascaraDocumento, proximaTercaOuQuinta, tamanhoArquivo } from '../formato';
 import { CampoMoeda, Dica, avisar, msgErro } from './ui';
 
 const DICA_ANEXO = 'Nota fiscal / boleto / chave pix / outros (podem ser enviados vários arquivos separados)';
 
 type Props = {
+  eu: Usuario;
   inicial: Reembolso | null;
   solicitantes: Solicitante[];
   fornecedores?: Fornecedor[];
@@ -34,9 +35,21 @@ function Fixo({ rotulo, valor, vazio = 'Não informado', classe }: { rotulo: str
   );
 }
 
-export default function ReembolsoForm({ inicial, solicitantes, aoSalvar, aoCancelar }: Props) {
+/** Acha o solicitante do usuário logado: primeiro pelo e-mail, depois pelo nome */
+function solicitanteDoUsuario(eu: Usuario, solicitantes: Solicitante[]) {
+  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return (
+    solicitantes.find((s) => s.email.trim().toLowerCase() === eu.email.trim().toLowerCase()) ??
+    solicitantes.find((s) => norm(s.nome) === norm(eu.nome))
+  );
+}
+
+export default function ReembolsoForm({ eu, inicial, solicitantes, aoSalvar, aoCancelar }: Props) {
   const editando = !!inicial;
-  const [solicitanteId, setSolicitanteId] = useState(inicial?.solicitante_id ? String(inicial.solicitante_id) : '');
+  const meu = solicitanteDoUsuario(eu, solicitantes);
+  const [solicitanteId, setSolicitanteId] = useState(
+    inicial ? (inicial.solicitante_id ? String(inicial.solicitante_id) : '') : meu ? String(meu.id) : '',
+  );
   const [valor, setValor] = useState(inicial?.valor_centavos ?? 0);
   const [descricao, setDescricao] = useState(inicial?.descricao ?? '');
   const [anexos, setAnexos] = useState<Anexo[]>(inicial?.anexos ?? []);
@@ -130,6 +143,16 @@ export default function ReembolsoForm({ inicial, solicitantes, aoSalvar, aoCance
           )}
           <Fixo rotulo="E-mail do solicitante" valor={dados.email} vazio="Preenchido ao escolher" />
         </div>
+        {!inicial && !meu && (
+          <p className="nota" style={{ margin: '12px 0 0' }}>
+            Seu usuário ainda não está ligado a um solicitante. Cadastre-se em <a href="#solicitantes">Solicitantes</a> com o mesmo e-mail do login (<strong>{eu.email}</strong>) para seus dados virem preenchidos.
+          </p>
+        )}
+        {!inicial && meu && String(meu.id) !== solicitanteId && solicitanteId && (
+          <p className="mudo pequeno" style={{ margin: '10px 0 0' }}>
+            Você está registrando em nome de outra pessoa. <button type="button" className="link" onClick={() => setSolicitanteId(String(meu.id))}>Voltar para {meu.nome}</button>
+          </p>
+        )}
         {faltas.length > 0 && (
           <p className="nota nota-alerta" style={{ margin: '12px 0 0' }}>
             O cadastro de <strong>{s!.nome}</strong> está incompleto. Falta: {faltas.join(', ')}. Complete em <a href="#solicitantes">Solicitantes</a> para registrar o reembolso.

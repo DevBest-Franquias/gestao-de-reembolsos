@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, abrirAnexo, STATUS, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
+import { api, abrirAnexo, STATUS, type Usuario, type Fornecedor, type Reembolso, type Solicitante, type Status } from '../api';
 import ReembolsoForm from '../components/ReembolsoForm';
 import { Modal, avisar, msgErro } from '../components/ui';
 import { formatarData, formatarMoeda, mascaraDocumento } from '../formato';
 
 type Filtro = Status | 'todos';
 
-export default function Reembolsos() {
+export default function Reembolsos({ eu }: { eu: Usuario }) {
   const [lista, setLista] = useState<Reembolso[]>([]);
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -165,6 +165,7 @@ export default function Reembolsos() {
       <Modal titulo={form?.item ? 'Editar solicitação' : 'Nova solicitação de reembolso'} aberto={!!form} aoFechar={() => setForm(null)} largo>
         {form && (
             <ReembolsoForm
+              eu={eu}
               inicial={form.item}
               solicitantes={solicitantes}
               fornecedores={fornecedores}

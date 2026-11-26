@@ -62,7 +62,7 @@ export default function App() {
         </div>
       </header>
       <main className="conteudo">
-        {aba === 'reembolsos' && <Reembolsos />}
+        {aba === 'reembolsos' && <Reembolsos eu={usuario} />}
         {aba === 'solicitantes' && <Solicitantes />}
         {aba === 'fornecedores' && <Fornecedores />}
         {aba === 'usuarios' && usuario.papel === 'admin' && <Usuarios eu={usuario} />}
