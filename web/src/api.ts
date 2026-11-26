@@ -36,6 +36,14 @@ export const abrirAnexo = (id: number) => abrirArquivo(`/anexos/${id}`);
 export const abrirComprovante = (cartaoId: number) => abrirArquivo(`/cartoes/${cartaoId}/comprovante`);
 export const abrirComprovanteCartaoReembolso = (reembolsoId: number) => abrirArquivo(`/reembolsos/${reembolsoId}/comprovante-cartao`);
 
+/** Baixa um arquivo da API (com login) para uso no navegador */
+export async function buscarArquivo(caminho: string) {
+  const r = await fetch(`${BASE}/api${caminho}`, { headers: { Authorization: `Bearer ${sessao.token}` } });
+  if (!r.ok) throw new ErroApi('Não foi possível baixar um dos arquivos.', r.status);
+  const blob = await r.blob();
+  return { blob, tipo: blob.type || r.headers.get('Content-Type') || '' };
+}
+
 async function abrirArquivo(caminho: string) {
   const janela = window.open('', '_blank');
   const r = await fetch(`${BASE}/api${caminho}`, { headers: { Authorization: `Bearer ${sessao.token}` } });

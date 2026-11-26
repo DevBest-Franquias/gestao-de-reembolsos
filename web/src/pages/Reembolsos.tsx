@@ -14,6 +14,19 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [busca, setBusca] = useState('');
   const [filtroSolicitante, setFiltroSolicitante] = useState('');
+  const [gerando, setGerando] = useState<number | null>(null);
+
+  const baixarPdf = async (r: Reembolso) => {
+    setGerando(r.id);
+    try {
+      const { gerarPdfCombinado } = await import('../pdfCombinado');
+      await gerarPdfCombinado(r);
+    } catch (e) {
+      avisar(msgErro(e), 'erro');
+    } finally {
+      setGerando(null);
+    }
+  };
 
   const carregar = async () => {
     try {
@@ -168,6 +181,22 @@ export default function Reembolsos({ eu }: { eu: Usuario }) {
                   <input type="date" className="data-inline" value={r.data_reembolso ?? ''} onChange={(e) => atualizar(r.id, { data_reembolso: e.target.value || null })} aria-label="Data do reembolso" />
                 </td>
                 <td className="acoes">
+                  <button
+                    className="icone-acao"
+                    onClick={() => baixarPdf(r)}
+                    disabled={gerando !== null}
+                    aria-label="Baixar PDF com os comprovantes"
+                    title="Baixar PDF com nota fiscal, comprovante de cobrança/Pix e imagem do cartão"
+                  >
+                    {gerando === r.id ? (
+                      <span className="girando" aria-hidden="true" />
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+                      </svg>
+                    )}
+                    <span className="acao-texto">{gerando === r.id ? 'Gerando…' : 'Baixar PDF'}</span>
+                  </button>
                   <button className="icone-acao" onClick={() => setForm({ item: r })} aria-label="Editar" title="Editar">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />

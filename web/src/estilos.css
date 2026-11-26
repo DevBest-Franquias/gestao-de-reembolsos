@@ -344,7 +344,7 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 .tabela-reembolsos .c-anexo { width: 13%; }
 .tabela-reembolsos .c-status { width: 178px; }
 .tabela-reembolsos .c-data { width: 154px; }
-.tabela-reembolsos .c-acoes { width: 92px; }
+.tabela-reembolsos .c-acoes { width: 128px; }
 .tabela-reembolsos th { white-space: normal; line-height: 1.3; }
 .tabela-reembolsos th, .tabela-reembolsos td { padding-left: 12px; padding-right: 12px; }
 .tabela-reembolsos td { overflow: hidden; overflow-wrap: anywhere; }
@@ -404,3 +404,6 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 .btn-contorno { background: #fff; color: var(--roxo-escuro); border-color: var(--roxo-200); text-decoration: none; display: inline-flex; align-items: center; }
 .btn-contorno:hover { background: var(--roxo-50); border-color: var(--roxo-claro); }
 @media (max-width: 860px) { .topo-acoes > * { flex: 1; justify-content: center; } }
+.icone-acao:disabled { opacity: 0.5; cursor: wait; }
+.girando { width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--roxo-200); border-top-color: var(--roxo-escuro); animation: girar 0.8s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
