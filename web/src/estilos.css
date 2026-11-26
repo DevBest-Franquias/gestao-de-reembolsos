@@ -160,8 +160,6 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 .tabela .vazio { text-align: center; color: var(--n-500); padding: 40px; }
 .tabela .acoes { text-align: right; white-space: nowrap; }
 .acoes-col { width: 1%; }
-.tabela-reembolsos th.col-acomp { background: var(--roxo-50); color: var(--roxo-escuro); }
-.tabela-reembolsos td.col-acomp { background: #fbf9ff; }
 .anexos-celula { display: flex; flex-direction: column; gap: 2px; max-width: 180px; }
 .anexos-celula .link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 
