@@ -1,6 +1,6 @@
 // Service worker do app: deixa o sistema instalável e abre rápido, mesmo com internet ruim.
 // Os dados (API) nunca ficam guardados aqui: sempre vêm do servidor.
-const VERSAO = 'reembolsos-v1';
+const VERSAO = 'reembolsos-v2';
 const ESSENCIAIS = ['/', '/index.html', '/manifest.webmanifest', '/icones/app-192.png', '/fonts/ZalandoSans-Variable.ttf', '/logo-best-franquias-branco.png', '/logo-best-franquias-roxoescuro.png'];
 
 self.addEventListener('install', (e) => {
