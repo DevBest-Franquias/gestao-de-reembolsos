@@ -68,7 +68,26 @@ const tipoPorNome = (nome: string) => {
   return '';
 };
 
+/** Busca um arquivo da API; o site e a extensão do Chrome passam a sua própria versão */
+export type Buscador = (caminho: string) => Promise<{ blob: Blob; tipo: string }>;
+
+/** Nome sugerido para o PDF combinado de uma solicitação */
+export const nomePdfCombinado = (r: Reembolso) =>
+  `reembolso-${r.id}-${r.solicitante_nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').toLowerCase()}.pdf`;
+
+/** Gera o PDF e baixa no navegador (usado pelo site) */
 export async function gerarPdfCombinado(r: Reembolso) {
+  const bytes = await montarPdfCombinado(r, buscarArquivo);
+  const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomePdfCombinado(r);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** Monta o PDF combinado e devolve os bytes */
+export async function montarPdfCombinado(r: Reembolso, buscar: Buscador): Promise<Uint8Array> {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
   const doc: TPDFDocument = await PDFDocument.create();
   doc.setTitle(seguro(`Reembolso ${r.id} - ${r.solicitante_nome}`));
@@ -138,7 +157,7 @@ export async function gerarPdfCombinado(r: Reembolso) {
     const inicio = doc.getPageCount() + 1;
     for (const arq of secao.arquivos) {
       try {
-        const { blob, tipo: tipoResposta } = await buscarArquivo(arq.caminho);
+        const { blob, tipo: tipoResposta } = await buscar(arq.caminho);
         const tipo = tipoResposta && tipoResposta !== 'application/octet-stream' ? tipoResposta : tipoPorNome(arq.nome);
         if (tipo.includes('pdf')) {
           const origem = await PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true });
@@ -224,12 +243,5 @@ export async function gerarPdfCombinado(r: Reembolso) {
     p.drawText(txt, { x: A4.largura - MARGEM - fonte.widthOfTextAtSize(txt, 8), y: 14, size: 8, font: fonte, color: cinza });
   });
 
-  const bytes = await doc.save();
-  const nomeArquivo = `reembolso-${r.id}-${r.solicitante_nome.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').toLowerCase()}.pdf`;
-  const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = nomeArquivo;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return await doc.save();
 }

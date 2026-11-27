@@ -93,3 +93,35 @@ web/
   src/components/  formulário de reembolso e componentes de interface
   vercel.json      roteamento da SPA
 ```
+
+---
+
+## Extensão do Chrome: preencher o formulário do Bitrix
+
+A pasta `extensao/` tem uma extensão que preenche o formulário de **Solicitação de Pagamento** do Bitrix
+(`https://hubsmart.bitrix24.site/solicitacao_pag_investidas/`) com os dados de uma solicitação do sistema
+e anexa o PDF combinado (nota fiscal, comprovante de cobrança ou Pix e imagem do cartão).
+Depois que a pessoa clica em **Enviar** no Bitrix, a extensão marca a solicitação como **Solicitado** no sistema.
+
+### Instalar (cada pessoa, uma vez)
+
+1. Baixe o pacote: `https://reembolsos-best-franquias.vercel.app/extensao-reembolsos-bitrix.zip`
+2. Descompacte numa pasta que não vá ser apagada (ex.: `Documentos/extensao-reembolsos`)
+3. No Chrome, abra `chrome://extensions` e ligue o **Modo do desenvolvedor** (canto superior direito)
+4. Clique em **Carregar sem compactação** e escolha a pasta descompactada
+5. Fixe a extensão na barra (ícone de quebra-cabeça → alfinete)
+
+### Usar
+
+1. Clique no ícone da extensão e entre com o mesmo e-mail e senha do sistema
+2. Escolha a solicitação e clique em **Preencher**: o formulário do Bitrix abre (se ainda não estiver aberto) e é preenchido
+3. Confira os dados no Bitrix e clique em **Enviar**
+
+### Atualizar a extensão
+
+Depois de mudar algo em `extensao/src`, rode `cd extensao && npm install && npm run build`.
+Isso gera `extensao/dist` e atualiza `web/public/extensao-reembolsos-bitrix.zip` (publicado pela Vercel).
+Quem já tem a extensão instalada substitui a pasta pelos arquivos novos e clica em **Atualizar** em `chrome://extensions`.
+
+Os códigos dos campos e opções do formulário do Bitrix ficam em `extensao/src/bitrix.ts`.
+Se o formulário mudar no Bitrix, é ali que se ajusta.
