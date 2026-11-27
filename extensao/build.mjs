@@ -35,7 +35,7 @@ const manifest = {
   action: { default_popup: 'popup.html', default_title: 'Preencher o Bitrix com um reembolso' },
   background: { service_worker: 'fundo.js' },
   permissions: ['storage', 'scripting', 'tabs'],
-  host_permissions: ['https://hubsmart.bitrix24.site/*', `${new URL(API_URL).origin}/*`],
+  host_permissions: ['https://hubsmart.bitrix24.site/*', `${new URL(API_URL).origin}/*`, `${new URL(WEB_URL).origin}/*`],
   content_scripts: [{ matches: ['https://hubsmart.bitrix24.site/*'], js: ['ponte.js'], run_at: 'document_start' }],
 };
 writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
@@ -44,6 +44,8 @@ cpSync('src/popup.css', 'dist/popup.css');
 cpSync('icones', 'dist/icones', { recursive: true });
 
 if (ZIP) {
+  // O site publica a versão mais nova; a extensão compara com a dela e avisa quando houver atualização
+  writeFileSync('../web/public/extensao-versao.json', JSON.stringify({ versao }) + '\n');
   rmSync(ZIP, { force: true });
   execSync(`cd dist && zip -qr ../${ZIP} .`);
   console.log('Pacote gerado em', ZIP.replace('../', ''));

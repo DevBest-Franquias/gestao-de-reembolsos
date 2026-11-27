@@ -5,12 +5,13 @@ import Login from './pages/Login';
 import Reembolsos from './pages/Reembolsos';
 import Solicitantes from './pages/Solicitantes';
 import Usuarios from './pages/Usuarios';
+import Extensao from './pages/Extensao';
 
-type Aba = 'reembolsos' | 'solicitantes' | 'usuarios';
+type Aba = 'reembolsos' | 'solicitantes' | 'extensao' | 'usuarios';
 
 const lerAba = (): Aba => {
   const h = window.location.hash.replace('#', '');
-  return (['reembolsos', 'solicitantes', 'usuarios'] as Aba[]).includes(h as Aba) ? (h as Aba) : 'reembolsos';
+  return (['reembolsos', 'solicitantes', 'extensao', 'usuarios'] as Aba[]).includes(h as Aba) ? (h as Aba) : 'reembolsos';
 };
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
   const abas: [Aba, string][] = [
     ['reembolsos', 'Reembolsos'],
     ['solicitantes', 'Solicitantes'],
+    ['extensao', 'Extensão do Bitrix'],
     ...(usuario.papel === 'admin' ? [['usuarios', 'Usuários'] as [Aba, string]] : []),
   ];
 
@@ -62,6 +64,7 @@ export default function App() {
       <main className="conteudo">
         {aba === 'reembolsos' && <Reembolsos eu={usuario} />}
         {aba === 'solicitantes' && <Solicitantes />}
+        {aba === 'extensao' && <Extensao />}
         {aba === 'usuarios' && usuario.papel === 'admin' && <Usuarios eu={usuario} />}
       </main>
       <Avisos />

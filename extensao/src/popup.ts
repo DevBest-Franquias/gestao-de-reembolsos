@@ -1,6 +1,6 @@
 import type { Reembolso, Usuario } from '../../web/src/api';
 import { montarPdfCombinado, nomePdfCombinado } from '../../web/src/pdfCombinado';
-import { valoresBitrix, BITRIX_URL, type ResultadoPreenchimento } from './bitrix';
+import { valoresBitrix, textoDescricao, BITRIX_URL, type ResultadoEnvio, type ResultadoPreenchimento } from './bitrix';
 import { API, api, lerSessao, salvarSessao } from './comum';
 
 declare const WEB_URL: string;
@@ -24,6 +24,32 @@ async function buscar(caminho: string) {
   if (!r.ok) throw new Error('Não foi possível baixar um dos arquivos da solicitação.');
   const blob = await r.blob();
   return { blob, tipo: blob.type || r.headers.get('Content-Type') || '' };
+}
+
+/** Compara versões no formato 1.2.3 */
+const maisNova = (a: string, b: string) => {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+};
+
+/** Mostra um aviso no topo quando o site tem uma versão mais nova da extensão */
+async function verificarAtualizacao() {
+  try {
+    const r = await fetch(`${WEB_URL}/extensao-versao.json`, { cache: 'no-store' });
+    const { versao } = (await r.json()) as { versao: string };
+    const atual = chrome.runtime.getManifest().version;
+    if (versao && maisNova(versao, atual)) {
+      const aviso = document.createElement('a');
+      aviso.className = 'atualizacao';
+      aviso.href = `${WEB_URL}/#extensao`;
+      aviso.target = '_blank';
+      aviso.textContent = `Nova versão da extensão disponível (${versao}). Clique para ver como atualizar.`;
+      document.body.insertBefore(aviso, conteudo);
+    }
+  } catch {
+    /* sem internet ou site fora do ar: segue sem aviso */
+  }
 }
 
 function telaLogin(erro = '') {
@@ -69,7 +95,8 @@ async function telaLista(aviso?: { tipo: 'ok' | 'falha' | 'info'; texto: string 
     conteudo.innerHTML = `<p class="erro">${esc((e as Error).message)}</p>`;
     return;
   }
-  const { ultimoEnvio, prefs } = await chrome.storage.local.get(['ultimoEnvio', 'prefs']);
+  const { ultimoEnvio, prefs, aguardandoEnvio } = await chrome.storage.local.get(['ultimoEnvio', 'prefs', 'aguardandoEnvio']);
+  const pendente = aguardandoEnvio ? lista.find((r) => r.id === aguardandoEnvio.id) : undefined;
   const filtro = (prefs as { status?: string; minhas?: boolean })?.status ?? 'nao_solicitado';
   const minhas = (prefs as { minhas?: boolean })?.minhas ?? true;
   if (!aviso && ultimoEnvio && Date.now() - ultimoEnvio.quando < 5 * 60_000) {
@@ -84,6 +111,21 @@ async function telaLista(aviso?: { tipo: 'ok' | 'falha' | 'info'; texto: string 
 
   conteudo.innerHTML = `
     ${aviso ? `<div class="aviso ${aviso.tipo}">${esc(aviso.texto)}</div>` : ''}
+    ${
+      pendente
+        ? `<div class="pendente">
+        <div class="pendente-titulo">Preenchido no Bitrix, aguardando sua conferência</div>
+        <div class="item-topo"><strong>${esc(pendente.solicitante_nome)}</strong><span class="valor">${moeda.format(pendente.valor_centavos / 100)}</span></div>
+        <div class="previa">"${esc(textoDescricao(pendente))}"</div>
+        <p class="mudo pequeno">Confira os dados na aba do formulário. Se estiver tudo certo, clique em Enviar.</p>
+        <div class="pendente-acoes">
+          <button class="btn btn-claro" id="cancelar">Cancelar</button>
+          <button class="btn" id="enviar">Enviar ao Bitrix</button>
+        </div>
+      </div>`
+        : ''
+    }`
+    + `
     <div class="filtros">
       <select id="filtro">
         <option value="nao_solicitado">Não solicitadas</option>
@@ -104,7 +146,11 @@ async function telaLista(aviso?: { tipo: 'ok' | 'falha' | 'info'; texto: string 
           <div class="desc" title="${esc(r.descricao)}">${esc(r.descricao || 'Sem descrição')}</div>
           <div class="item-rodape">
             <span class="mudo pequeno">Venc. ${dataBr(r.data_pagamento)} · <span class="selo ${r.status}">${ROTULO_STATUS[r.status]}</span></span>
-            <button class="btn" data-id="${r.id}" title="Preencher o formulário do Bitrix com esta solicitação">Preencher</button>
+            ${
+              pendente?.id === r.id
+                ? `<button class="btn btn-enviar" data-enviar="1" title="Enviar o formulário já preenchido no Bitrix">Enviar</button>`
+                : `<button class="btn" data-id="${r.id}" title="Preencher o formulário do Bitrix com esta solicitação">Preencher</button>`
+            }
           </div>
         </div>`,
               )
@@ -115,6 +161,7 @@ async function telaLista(aviso?: { tipo: 'ok' | 'falha' | 'info'; texto: string 
     <div class="rodape pequeno">
       <a href="${WEB_URL}" target="_blank">Abrir o sistema</a>
       <a href="${BITRIX_URL}" target="_blank">Abrir o formulário do Bitrix</a>
+      <span class="mudo">v${chrome.runtime.getManifest().version}</span>
     </div>`;
 
   $<HTMLSelectElement>('#filtro').value = filtro;
@@ -125,6 +172,9 @@ async function telaLista(aviso?: { tipo: 'ok' | 'falha' | 'info'; texto: string 
   $<HTMLSelectElement>('#filtro').onchange = salvarPrefs;
   $<HTMLInputElement>('#minhas').onchange = salvarPrefs;
   conteudo.querySelectorAll<HTMLButtonElement>('button[data-id]').forEach((b) => (b.onclick = () => preencher(Number(b.dataset.id), b)));
+  conteudo.querySelectorAll<HTMLButtonElement>('#enviar, button[data-enviar]').forEach((b) => (b.onclick = () => enviar(b)));
+  const cancelar = document.querySelector<HTMLButtonElement>('#cancelar');
+  if (cancelar) cancelar.onclick = async () => { await chrome.runtime.sendMessage({ tipo: 'cancelar' }); telaLista(); };
 }
 
 async function preencher(id: number, botao: HTMLButtonElement) {
@@ -143,12 +193,9 @@ async function preencher(id: number, botao: HTMLButtonElement) {
       arquivo: { nome: nomePdfCombinado(r), tipo: 'application/pdf', base64: base64(bytes) },
     });
     if (resultado.ok) {
-      const semDescricao = !r.descricao.trim();
       telaLista({
-        tipo: semDescricao ? 'falha' : 'info',
-        texto:
-          (semDescricao ? 'Atenção: esta solicitação está sem descrição, que é obrigatória no Bitrix. Preencha a descrição lá antes de enviar. ' : '') +
-          'Formulário preenchido e PDF anexado. Confira os dados no Bitrix e clique em Enviar. Ao enviar, a solicitação será marcada como Solicitado aqui no sistema.',
+        tipo: 'info',
+        texto: 'Formulário preenchido e PDF anexado. Confira os dados na aba do Bitrix. Se estiver tudo certo, clique em Enviar aqui na extensão.',
       });
     } else {
       telaLista({ tipo: 'falha', texto: resultado.erro });
@@ -158,10 +205,19 @@ async function preencher(id: number, botao: HTMLButtonElement) {
   }
 }
 
+async function enviar(botao: HTMLButtonElement) {
+  conteudo.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.disabled = true));
+  botao.textContent = 'Enviando…';
+  const r: ResultadoEnvio = await chrome.runtime.sendMessage({ tipo: 'enviar' });
+  if (r.ok) telaLista({ tipo: 'ok', texto: 'Enviado ao Bitrix. A solicitação foi marcada como Solicitado no sistema.' });
+  else telaLista({ tipo: 'falha', texto: r.erro });
+}
+
 $('#sair').onclick = async () => {
   await api('/logout', { method: 'POST' }).catch(() => {});
   await salvarSessao(null);
   telaLogin();
 };
 
+verificarAtualizacao();
 telaLista();

@@ -407,3 +407,29 @@ input[type='checkbox'] { width: auto; accent-color: var(--roxo-escuro); }
 .icone-acao:disabled { opacity: 0.5; cursor: wait; }
 .girando { width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--roxo-200); border-top-color: var(--roxo-escuro); animation: girar 0.8s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
+
+/* ---------- Tutorial da extensão ---------- */
+.tutorial .cartao-branco h2 { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.tutorial-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.tutorial-secao { margin-bottom: 16px; }
+.numero { width: 28px; height: 28px; border-radius: 999px; background: var(--roxo-escuro); color: #fff; display: inline-grid; place-items: center; font-size: 14px; flex: none; }
+.passos { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.passos li { padding-left: 4px; }
+.passos-resumo { margin: 0 0 10px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.tutorial code { background: var(--n-100); border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+.copiar { display: flex; align-items: center; gap: 10px; margin-top: 8px; border: 1px solid var(--roxo-200); background: var(--roxo-50); border-radius: 12px; padding: 6px 8px 6px 10px; cursor: pointer; font: inherit; }
+.copiar code { background: transparent; padding: 0; font-size: 14px; color: var(--n-900); }
+.copiar span { color: var(--roxo-escuro); font-weight: 700; }
+.copiar:hover { border-color: var(--roxo-claro); }
+.tutorial-uso { display: grid; grid-template-columns: minmax(0, 1fr) 260px 260px; gap: 20px; align-items: start; }
+.tutorial figure { margin: 0; }
+.tutorial figure img { width: 100%; border: 1px solid var(--n-200); border-radius: 14px; box-shadow: var(--sombra-1); display: block; }
+.tutorial figcaption { font-size: 12px; color: var(--n-500); margin-top: 6px; text-align: center; }
+.duvidas { margin: 0; }
+.duvidas dt { font-weight: 700; color: var(--n-900); margin-top: 12px; }
+.duvidas dt:first-child { margin-top: 0; }
+.duvidas dd { margin: 2px 0 0; color: var(--n-700); }
+@media (max-width: 1100px) { .tutorial-uso { grid-template-columns: 1fr 1fr; } .tutorial-uso .passos { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .tutorial-grade, .tutorial-uso { grid-template-columns: 1fr; } }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+a.btn-primario, a.btn-primario:visited { color: #fff; }

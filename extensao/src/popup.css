@@ -39,3 +39,10 @@ input:focus, select:focus { outline: 2px solid var(--roxo-claro); outline-offset
 a { color: var(--roxo); }
 .selo { white-space: nowrap; }
 .item-rodape .btn { flex: none; }
+.pendente { background: #fff; border: 2px solid var(--roxo-claro); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; }
+.pendente-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--roxo); margin-bottom: 6px; }
+.previa { margin: 6px 0; padding: 8px 10px; background: var(--roxo-50); border-radius: 10px; font-style: italic; }
+.pendente-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.btn-enviar { background: var(--verde); }
+.atualizacao { display: block; padding: 8px 14px; background: #fdf3e0; color: #6b4300; font-weight: 600; text-decoration: none; border-bottom: 1px solid #f3d9a6; }
+.atualizacao:hover { background: #fbe9c6; }

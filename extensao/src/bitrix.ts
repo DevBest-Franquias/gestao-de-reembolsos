@@ -47,6 +47,13 @@ const mascara = (d: string) => {
   return d;
 };
 
+/** Texto do campo Descrição do pagamento no Bitrix, montado a partir da descrição do sistema */
+export function textoDescricao(r: Reembolso) {
+  const d = r.descricao.trim().replace(/[.\s]+$/, '');
+  if (!d) return `Olá, equipe! Esse valor é referente a um reembolso de despesa de ${r.solicitante_nome}.`;
+  return `Olá, equipe! Esse valor é referente a ${d}.`;
+}
+
 /** Valores do formulário do Bitrix a partir de uma solicitação do sistema */
 export function valoresBitrix(r: Reembolso): Record<string, string | string[]> {
   return {
@@ -58,7 +65,7 @@ export function valoresBitrix(r: Reembolso): Record<string, string | string[]> {
     [CAMPOS.numeroDoc]: r.numero_documento || '0',
     [CAMPOS.vencimento]: dataBr(r.data_pagamento),
     [CAMPOS.valor]: valorBitrix(r.valor_centavos),
-    [CAMPOS.descricao]: r.descricao,
+    [CAMPOS.descricao]: textoDescricao(r),
     [CAMPOS.forma]: OPCOES.formaPix,
     [CAMPOS.chavePix]: r.chave_pix,
     [CAMPOS.banco]: r.banco,
@@ -144,4 +151,33 @@ export async function preencherNoBitrix(
 
   const preenchidos = Object.values(form.values()).filter((v) => Array.isArray(v) && v.length > 0).length;
   return { ok: true, preenchidos };
+}
+
+export type ResultadoEnvio = { ok: true } | { ok: false; erro: string };
+
+/**
+ * Roda DENTRO da página do Bitrix (mundo principal): clica no botão Enviar do próprio formulário,
+ * como a pessoa faria, e espera o Bitrix confirmar o envio.
+ */
+export async function enviarNoBitrix(): Promise<ResultadoEnvio> {
+  type FormB24 = { sent?: boolean; loading?: boolean; node?: HTMLElement };
+  const w = window as unknown as { b24form?: { App?: { list: () => FormB24[] } } };
+  const form = w.b24form?.App?.list?.()[0];
+  if (!form) return { ok: false, erro: 'O formulário do Bitrix não está carregado nesta aba.' };
+  if (form.sent) return { ok: true };
+  const raiz: ParentNode = form.node instanceof Element ? form.node : document;
+  const botao = (raiz.querySelector('button[type=submit]') ?? document.querySelector('.b24-form button[type=submit]')) as HTMLButtonElement | null;
+  if (!botao) return { ok: false, erro: 'Não achei o botão Enviar do formulário.' };
+  botao.click();
+  // Espera até 30 segundos pela confirmação do Bitrix
+  for (let i = 0; i < 120; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    if (form.sent) return { ok: true };
+    // Se o Bitrix não está enviando e mostra campos com erro, para de esperar
+    if (i > 4 && !form.loading) {
+      const erros = [...document.querySelectorAll('.b24-form-control-alert-message')].filter((e) => (e as HTMLElement).offsetParent);
+      if (erros.length) return { ok: false, erro: 'O Bitrix apontou campos obrigatórios sem preencher. Confira o formulário, corrija e clique em Enviar de novo.' };
+    }
+  }
+  return { ok: false, erro: 'O Bitrix não confirmou o envio. Confira na aba do formulário se ele foi enviado.' };
 }

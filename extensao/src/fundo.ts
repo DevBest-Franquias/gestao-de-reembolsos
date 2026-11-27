@@ -1,9 +1,11 @@
-import { BITRIX_PADRAO, BITRIX_URL, CAMPOS, preencherNoBitrix, type ArquivoParaAnexar } from './bitrix';
+import { BITRIX_PADRAO, BITRIX_URL, CAMPOS, enviarNoBitrix, preencherNoBitrix, type ArquivoParaAnexar } from './bitrix';
 import { api } from './comum';
 
 type Pedido =
   | { tipo: 'preencher'; id: number; valores: Record<string, string | string[]>; arquivo: ArquivoParaAnexar | null }
-  | { tipo: 'enviado'; id: number };
+  | { tipo: 'enviado'; id: number }
+  | { tipo: 'enviar' }
+  | { tipo: 'cancelar' };
 
 /** Usa a aba do formulário que já estiver aberta; se não houver, abre uma */
 async function abaDoFormulario(): Promise<chrome.tabs.Tab> {
@@ -36,12 +38,31 @@ async function preencher(p: Extract<Pedido, { tipo: 'preencher' }>) {
     args: [p.valores, p.arquivo, CAMPOS.anexos, p.id],
   });
   const resultado = res?.result ?? { ok: false, erro: 'O Chrome não conseguiu acessar a página do Bitrix.' };
-  if (resultado.ok) await chrome.storage.local.set({ aguardandoEnvio: { id: p.id, aba: aba.id } });
+  if (resultado.ok) await chrome.storage.local.set({ aguardandoEnvio: { id: p.id, aba: aba.id, quando: Date.now() } });
+  return resultado;
+}
+
+/** Segundo passo: envia o formulário que a extensão preencheu, depois de a pessoa conferir */
+async function enviar() {
+  const { aguardandoEnvio } = await chrome.storage.local.get('aguardandoEnvio');
+  if (!aguardandoEnvio) return { ok: false, erro: 'Nenhum formulário preenchido aguardando envio.' };
+  const aba = await chrome.tabs.get(aguardandoEnvio.aba).catch(() => null);
+  if (!aba?.url?.startsWith(BITRIX_URL)) {
+    await chrome.storage.local.remove('aguardandoEnvio');
+    return { ok: false, erro: 'A aba do formulário foi fechada ou mudou de página. Preencha de novo.' };
+  }
+  await chrome.tabs.update(aba.id!, { active: true });
+  const [res] = await chrome.scripting.executeScript({ target: { tabId: aba.id! }, world: 'MAIN', func: enviarNoBitrix });
+  const resultado = res?.result ?? { ok: false, erro: 'O Chrome não conseguiu acessar a página do Bitrix.' };
+  if (resultado.ok) await marcarSolicitado(aguardandoEnvio.id);
   return resultado;
 }
 
 /** O formulário foi enviado no Bitrix: marca a solicitação como Solicitado no sistema */
+let ultimoMarcado = 0;
 async function marcarSolicitado(id: number) {
+  if (ultimoMarcado === id) return;
+  ultimoMarcado = id;
   try {
     await api(`/reembolsos/${id}`, { method: 'PATCH', json: { status: 'solicitado' } });
     await chrome.storage.local.set({ ultimoEnvio: { id, quando: Date.now(), ok: true } });
@@ -60,6 +81,14 @@ chrome.runtime.onMessage.addListener((pedido: Pedido, _remetente, responder) => 
   if (pedido.tipo === 'preencher') {
     preencher(pedido).then(responder, (e) => responder({ ok: false, erro: String(e?.message ?? e) }));
     return true; // resposta assíncrona
+  }
+  if (pedido.tipo === 'enviar') {
+    enviar().then(responder, (e) => responder({ ok: false, erro: String(e?.message ?? e) }));
+    return true;
+  }
+  if (pedido.tipo === 'cancelar') {
+    chrome.storage.local.remove('aguardandoEnvio').then(() => responder({ ok: true }));
+    return true;
   }
   if (pedido.tipo === 'enviado') {
     marcarSolicitado(pedido.id).then(() => responder({ ok: true }));
