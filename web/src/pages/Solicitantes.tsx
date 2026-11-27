@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, abrirComprovante, enviarComprovante, type Cartao, type Solicitante } from '../api';
 import { Modal, avisar, msgErro } from '../components/ui';
+import { Icone } from '../components/Icone';
+import { Info, LinhaExpansivel } from '../components/Expansivel';
+import { TELA, useTelaMinima } from '../telas';
 import { documentoValido, mascaraDocumento, soDigitos, tamanhoArquivo } from '../formato';
 
 /** Cartão sendo editado no formulário. As mudanças só vão para a API ao salvar. */
@@ -38,6 +41,7 @@ export default function Solicitantes() {
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [busca, setBusca] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const tabela = useTelaMinima(TELA.desktop);
 
   const carregar = () => api<Solicitante[]>('/solicitantes').then(setLista).catch((e) => avisar(msgErro(e), 'erro'));
   useEffect(() => { carregar(); }, []);
@@ -111,18 +115,34 @@ export default function Solicitantes() {
     `${s.nome} ${s.cpf ?? ''} ${mascaraDocumento(s.cpf ?? '')} ${s.email} ${s.banco ?? ''} ${s.chave_pix ?? ''} ${(s.cartoes ?? []).map((k) => k.final).join(' ')}`.toLowerCase().includes(t),
   );
 
+  const cartoesDe = (s: Solicitante) =>
+    (s.cartoes ?? []).length === 0 ? <span className="mudo">Nenhum</span> : (
+      <div className="cartoes-celula">
+        {s.cartoes.map((k) =>
+          k.comprovante ? (
+            <button key={k.id} className="chip-cartao com-pdf" title="Abrir comprovante" onClick={() => abrirComprovante(k.id).catch((e) => avisar(msgErro(e), 'erro'))}>
+              •••• {k.final} <span className="pdf">{extensao(k.comprovante.nome)}</span>
+            </button>
+          ) : (
+            <span key={k.id} className="chip-cartao" title="Sem comprovante">•••• {k.final}</span>
+          ),
+        )}
+      </div>
+    );
+
   return (
     <section>
       <div className="pagina-topo">
-        <div>
+        <div className="pagina-titulo">
           <h1>Solicitantes</h1>
           <p className="mudo">Quem pede reembolso. Ao escolher um solicitante na solicitação, nome e e-mail entram sozinhos.</p>
         </div>
-        <button className="btn btn-primario" onClick={abrirNovo}>Novo solicitante</button>
+        <button className="btn btn-primario acao-principal" aria-label="Novo solicitante" onClick={abrirNovo}><Icone nome="mais" tamanho={20} /> <span>Novo solicitante</span></button>
       </div>
-      <div className="filtros">
-        <input className="busca" placeholder="Buscar por nome, CPF, e-mail, banco, Pix ou final do cartão" value={busca} onChange={(e) => setBusca(e.target.value)} />
+      <div className="busca-linha">
+        <input className="busca" type="search" placeholder="Buscar por nome, CPF, e-mail, banco, Pix ou final do cartão" value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
+      {tabela ? (
       <div className="tabela-caixa">
         <table className="tabela">
           <thead><tr><th>Nome completo</th><th>CPF</th><th>E-mail corporativo</th><th>Dados bancários</th><th>Cartões</th><th className="acoes-col" /></tr></thead>
@@ -134,19 +154,7 @@ export default function Solicitantes() {
                 <td>{s.email}</td>
                 <td><ResumoBancario s={s} /></td>
                 <td>
-                  {(s.cartoes ?? []).length === 0 ? <span className="mudo">Nenhum</span> : (
-                    <div className="cartoes-celula">
-                      {s.cartoes.map((k) =>
-                        k.comprovante ? (
-                          <button key={k.id} className="chip-cartao com-pdf" title="Abrir comprovante" onClick={() => abrirComprovante(k.id).catch((e) => avisar(msgErro(e), 'erro'))}>
-                            •••• {k.final} <span className="pdf">{extensao(k.comprovante.nome)}</span>
-                          </button>
-                        ) : (
-                          <span key={k.id} className="chip-cartao" title="Sem comprovante">•••• {k.final}</span>
-                        ),
-                      )}
-                    </div>
-                  )}
+                  {cartoesDe(s)}
                 </td>
                 <td className="acoes">
                   <button className="btn btn-fantasma btn-pequeno" onClick={() => abrirEdicao(s)}>Editar</button>
@@ -158,6 +166,38 @@ export default function Solicitantes() {
           </tbody>
         </table>
       </div>
+      ) : (
+        <ul className="lista-exp">
+          {filtrados.map((s) => (
+            <LinhaExpansivel
+              key={s.id}
+              resumo={
+                <>
+                  <strong className="linha-titulo">{s.nome}</strong>
+                  <span className="linha-sub">{s.cpf ? mascaraDocumento(s.cpf) : 'CPF não informado'}</span>
+                </>
+              }
+              lateral={
+                <span className="indicadores">
+                  <span className={`indicador ${s.banco && s.conta ? 'ok' : ''}`} title={s.banco ? 'Dados bancários cadastrados' : 'Sem dados bancários'}><Icone nome="banco" tamanho={16} /></span>
+                  <span className={`indicador ${s.cartoes?.length ? 'ok' : ''}`} title={`${s.cartoes?.length ?? 0} cartão(ões)`}><Icone nome="cartao" tamanho={16} />{s.cartoes?.length ? <small>{s.cartoes.length}</small> : null}</span>
+                </span>
+              }
+            >
+              <div className="info-grade">
+                <Info rotulo="E-mail corporativo" largo>{s.email}</Info>
+                <Info rotulo="Dados bancários" largo><ResumoBancario s={s} /></Info>
+                <Info rotulo="Cartões" largo>{cartoesDe(s)}</Info>
+              </div>
+              <div className="linha-acoes">
+                <button className="icone-acao" onClick={() => abrirEdicao(s)}><Icone nome="editar" tamanho={18} /><span className="acao-texto">Editar</span></button>
+                <button className="icone-acao perigo" onClick={() => excluir(s)}><Icone nome="lixeira" tamanho={18} /><span className="acao-texto">Excluir</span></button>
+              </div>
+            </LinhaExpansivel>
+          ))}
+          {!filtrados.length && <li className="vazio-lista">Nenhum solicitante cadastrado.</li>}
+        </ul>
+      )}
 
       <Modal titulo={edicao?.id ? 'Editar solicitante' : 'Novo solicitante'} aberto={!!edicao} aoFechar={() => setEdicao(null)} largo>
         {edicao && (

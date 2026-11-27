@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Usuario } from '../api';
 import { CampoSenha, Modal, avisar, msgErro } from '../components/ui';
+import { Icone } from '../components/Icone';
+import { Info, LinhaExpansivel } from '../components/Expansivel';
+import { TELA, useTelaMinima } from '../telas';
 
 type Novo = { nome: string; email: string; senha: string; papel: 'admin' | 'usuario' };
 
@@ -10,6 +13,7 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
   const [redefinir, setRedefinir] = useState<Usuario | null>(null);
   const [novaSenha, setNovaSenha] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const tabela = useTelaMinima(TELA.tablet);
 
   const carregar = () => api<Usuario[]>('/usuarios').then(setLista).catch((e) => avisar(msgErro(e), 'erro'));
   useEffect(() => { carregar(); }, []);
@@ -47,12 +51,13 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
   return (
     <section>
       <div className="pagina-topo">
-        <div>
+        <div className="pagina-titulo">
           <h1>Usuários</h1>
           <p className="mudo">Quem pode entrar no sistema. Administradores também gerenciam esta lista e redefinem senhas.</p>
         </div>
-        <button className="btn btn-primario" onClick={() => setNovo({ nome: '', email: '', senha: '', papel: 'usuario' })}>Novo usuário</button>
+        <button className="btn btn-primario acao-principal" aria-label="Novo usuário" onClick={() => setNovo({ nome: '', email: '', senha: '', papel: 'usuario' })}><Icone nome="mais" tamanho={20} /> <span>Novo usuário</span></button>
       </div>
+      {tabela ? (
       <div className="tabela-caixa">
         <table className="tabela">
           <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th className="acoes-col" /></tr></thead>
@@ -73,6 +78,34 @@ export default function Usuarios({ eu }: { eu: Usuario }) {
           </tbody>
         </table>
       </div>
+      ) : (
+        <ul className="lista-exp">
+          {lista.map((x) => (
+            <LinhaExpansivel
+              key={x.id}
+              resumo={
+                <>
+                  <strong className="linha-titulo">{x.nome}{x.id === eu.id && <span className="mudo pequeno"> (você)</span>}</strong>
+                  <span className="linha-sub">{x.email}</span>
+                </>
+              }
+              lateral={<span className={`selo ${x.papel === 'admin' ? 'selo-roxo' : 'selo-cinza'}`}>{x.papel === 'admin' ? 'Admin' : 'Usuário'}</span>}
+            >
+              <div className="info-grade">
+                <Info rotulo="Perfil">{x.papel === 'admin' ? 'Administrador' : 'Usuário'}</Info>
+              </div>
+              <div className="linha-acoes">
+                <button className="icone-acao" onClick={() => { setNovaSenha(''); setRedefinir(x); }}>
+                  <Icone nome="chave" tamanho={18} /><span className="acao-texto">{x.id === eu.id ? 'Alterar minha senha' : 'Redefinir senha'}</span>
+                </button>
+                {x.id !== eu.id && (
+                  <button className="icone-acao perigo" onClick={() => excluir(x)}><Icone nome="lixeira" tamanho={18} /><span className="acao-texto">Remover</span></button>
+                )}
+              </div>
+            </LinhaExpansivel>
+          ))}
+        </ul>
+      )}
 
       <Modal titulo="Novo usuário" aberto={!!novo} aoFechar={() => setNovo(null)}>
         {novo && (

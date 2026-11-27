@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { avisar } from '../components/ui';
+import { Icone } from '../components/Icone';
 
 const ZIP = '/extensao-reembolsos-bitrix.zip';
 const BITRIX = 'https://hubsmart.bitrix24.site/solicitacao_pag_investidas/';
@@ -28,16 +29,24 @@ export default function Extensao() {
   return (
     <section className="tutorial">
       <div className="pagina-topo">
-        <div>
+        <div className="pagina-titulo">
           <h1>Extensão do Bitrix</h1>
           <p className="mudo">
             Preenche o formulário de Solicitação de Pagamento do Bitrix com os dados de uma solicitação deste sistema, anexa o PDF com os comprovantes e,
             depois do envio, marca a solicitação como Solicitado.
           </p>
         </div>
-        <a className="btn btn-primario" href={ZIP} download>
-          Baixar extensão{versao ? ` (versão ${versao})` : ''}
+        <a className="btn btn-primario so-computador" href={ZIP} download>
+          <Icone nome="baixar" tamanho={18} /> Baixar extensão{versao ? ` (versão ${versao})` : ''}
         </a>
+      </div>
+
+      <div className="aviso-celular so-celular">
+        <Icone nome="computador" tamanho={22} />
+        <p>
+          A extensão funciona no <strong>Google Chrome do computador</strong>. Abra esta página no computador para baixar e instalar.
+          Pelo celular, você pode ler o passo a passo abaixo.
+        </p>
       </div>
 
       <div className="tutorial-grade">

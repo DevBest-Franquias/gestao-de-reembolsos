@@ -125,3 +125,19 @@ Quem já tem a extensão instalada substitui a pasta pelos arquivos novos e clic
 
 Os códigos dos campos e opções do formulário do Bitrix ficam em `extensao/src/bitrix.ts`.
 Se o formulário mudar no Bitrix, é ali que se ajusta.
+
+---
+
+## Celular e app instalável
+
+O site foi feito em **mobile-first**: o estilo base (`web/src/estilos.css`) é o do celular e os blocos
+`@media (min-width: ...)` acrescentam o layout de tablet (768px), a navegação no topo (900px) e o de computador (1100px).
+
+- No celular, as tabelas viram listas que **expandem ao toque**, as abas ficam fixas embaixo e a ação principal é o botão **+** flutuante.
+- Formulários abrem em tela cheia com os botões sempre visíveis; campos com 16px para o iPhone não dar zoom.
+- O site é um **PWA**: `web/public/manifest.webmanifest`, ícones em `web/public/icones/` e o service worker `web/public/sw.js`
+  (guarda só os arquivos do app; os dados sempre vêm da API). Ao mudar o `sw.js`, troque a constante `VERSAO` dele.
+
+### Instalar no celular
+- **Android (Chrome):** menu do usuário (iniciais no canto) → **Instalar app no celular**, ou a faixa "Use como app no celular".
+- **iPhone (Safari):** botão **Compartilhar** → **Adicionar à Tela de Início**. O menu do usuário mostra esse passo a passo.
